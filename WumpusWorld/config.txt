@@ -1,0 +1,6 @@
+#Option can be:
+#GUI - Starts the GUI version
+#sim - Runs a simulation of 10 random maps
+#simdb - Runs a simulation of all maps in the maps file.
+Option=GUI
+Mapfile=maps.txt
