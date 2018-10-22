@@ -51,8 +51,9 @@ public class QTable {
      * @return World current state's QState
      */
     public QState getQStateFromWorld(World w) {
-        QState state = new QState();  
+        QState state = new QState(); 
         state.tileData = new byte[16];
+        state.hasFallenIntoPit = (byte)(w.isInPit() ? 1 : 0);
         state.playerD = (byte)w.getDirection();
         state.playerX = (byte)w.getPlayerX();
         state.playerY = (byte)w.getPlayerY();
@@ -60,16 +61,18 @@ public class QTable {
         for (int y = 0; y < 4; y++) {
             for (int x = 0; x < 4; x++) {
                 int i = 4*y + x;
+                int wx = x + 1; // World-format X starts from 1 instead of 0
+                int wy = y + 1; // World-format Y starts from 1 instead of 0
                 byte td;
-                if (w.isUnknown(x, y)) {
+                if (w.isUnknown(wx, wy)) {
                     td = QState.UNEXPLORED;
                 } else {
                     td = QState.EXPLORED;
-                    td = (byte)( td | (w.hasBreeze(x, y)  ? QState.BREEZE  : 0) );
-                    td = (byte)( td | (w.hasStench(x, y)  ? QState.STENCH  : 0) );
-                    td = (byte)( td | (w.hasPit(x, y)     ? QState.PIT     : 0) );
-                    td = (byte)( td | (w.hasWumpus(x, y)  ? QState.WUMPUS  : 0) );
-                    td = (byte)( td | (w.hasGlitter(x, y) ? QState.GLITTER : 0) );
+                    td = (byte)( td | (w.hasBreeze(wx, wy)  ? QState.BREEZE  : 0) );
+                    td = (byte)( td | (w.hasStench(wx, wy)  ? QState.STENCH  : 0) );
+                    td = (byte)( td | (w.hasPit(wx, wy)     ? QState.PIT     : 0) );
+                    td = (byte)( td | (w.hasWumpus(wx, wy)  ? QState.WUMPUS  : 0) );
+                    td = (byte)( td | (w.hasGlitter(wx, wy) ? QState.GLITTER : 0) );
                 }
                 
                 state.tileData[i] = td;
@@ -84,16 +87,24 @@ public class QTable {
         // Otherwise simply return stored QTable entry ref
         if (mappedState == null) {
             state.actionQValues = new Double[6];
-            state.actionQValues[0] = Double.MIN_VALUE;
-            state.actionQValues[1] = Double.MIN_VALUE;
-            state.actionQValues[2] = Double.MIN_VALUE;
-            state.actionQValues[3] = Double.MIN_VALUE;
-            state.actionQValues[4] = Double.MIN_VALUE;
-            state.actionQValues[5] = Double.MIN_VALUE;
-            this.storeQState(state);
+            state.actionQValues[0] = QState.DEFAULT_VAL;
+            state.actionQValues[1] = QState.DEFAULT_VAL;
+            state.actionQValues[2] = QState.DEFAULT_VAL;
+            state.actionQValues[3] = QState.DEFAULT_VAL;
+            state.actionQValues[4] = QState.DEFAULT_VAL;
+            state.actionQValues[5] = QState.DEFAULT_VAL;            
+            this.storeQState(state);            
             return state;
-        } else {
+        } else {            
             return mappedState;
         }
+    }
+    
+    /**
+     * Get stored QState count
+     * @return QState count
+     */
+    public int getQStateCount() {
+        return _table.size();
     }
 }

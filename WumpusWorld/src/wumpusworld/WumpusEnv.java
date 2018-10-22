@@ -12,24 +12,29 @@ import java.util.Random;
  * @author Azeroc
  */
 public class WumpusEnv {
+    // SPECIAL SETTINGS
+    private static final boolean ENABLE_FULL_EXPLORATION = true; // Encourages to fill missing Q-values for actions at least once
+    
     // LEARNING PARAMS
     public static final Double ALPHA = 0.01; // Learning Rate
     public static final Double GAMMA = 0.99; // Reward discount
     public static final int MAX_EP_LEN = 10000; // Max episode length (Max actions per episode)
     
     // ACTION REWARD CONSTANTS
-    public static final Double REW_ACT_TL = -5.0;   // Turn Left
+    public static final Double REW_ACT_TL = -2.0;   // Turn Left
     public static final Double REW_ACT_FW = -1.0;   // Forward
-    public static final Double REW_ACT_TR = -5.0;   // Turn Right
-    public static final Double REW_ACT_GR = -10.0;  // Grab
-    public static final Double REW_ACT_CL = -10.0;  // Climb
-    public static final Double REW_ACT_SH = -100.0; // Shoot
+    public static final Double REW_ACT_TR = -2.0;   // Turn Right
+    public static final Double REW_ACT_GR = -1.0;  // Grab
+    public static final Double REW_ACT_CL = -1.0;  // Climb
+    public static final Double REW_ACT_SH = -10.0; // Shoot
     
     // CONSEQUENCE REWARDS
-    public static final Double REW_WUMPUS = -2000.0;   // Step into Wumpus
-    public static final Double REW_PIT = -1000.0;      // Step into Pit
-    public static final Double REW_CLIMB_OUT = 10.0;   // Climb out of pit
-    public static final Double REW_GRAB_GOLD = 1000.0; // Grab gold
+    public static final Double REW_WUMPUS = -200.0;   // Step into Wumpus
+    public static final Double REW_PIT = -100.0;      // Step into Pit
+    public static final Double REW_CLIMB_OUT = 20.0;  // Climb out of pit
+    public static final Double REW_GRAB_GOLD = 100.0; // Grab gold
+    public static final Double REW_WASTE_TIME = -100.0; // Waste time by doing useless actions
+    public static final Double REW_WASTE_ARROW = -100.0; // Waste arrow or use 'Shoot' when don't have arrow
     
     // Private members
     private final Random rand;
@@ -71,25 +76,47 @@ public class WumpusEnv {
      * @return Reward
      */
     private Double resolveConsequenceReward(World w, int action) {
+        String worldAction = QState.resolveToWorldAction(action);
+        
         // Get pre-action state
+        int oldX = w.getPlayerX();
+        int oldY = w.getPlayerY();
         boolean oldPitFlag = w.isInPit();
+        boolean oldArrowFlag = w.hasArrow();
+        boolean oldInStench = w.hasStench(oldX, oldY);
         
         // Do action
-        w.doAction(QState.resolveToWorldAction(action));
+        w.doAction(worldAction);
         
         // Get post-action state
         int newX = w.getPlayerX();
         int newY = w.getPlayerY();
         boolean newPitFlag = w.isInPit();
+        boolean newInStench = w.hasStench(newX, newY);
         
+        // Check if we got gold
+        if (w.hasGold()) {
+            return REW_GRAB_GOLD;
+        }
+        
+        // Wasting time doing 'Grab' action
+        if (worldAction.equals(World.A_GRAB)) {
+            return REW_WASTE_TIME;
+        }
+        
+        // Wasting time in pit
+        if (oldPitFlag && newPitFlag) {
+            return REW_WASTE_TIME;
+        }
+                
         // Player has climbed out
         if (oldPitFlag && !newPitFlag) {
             return REW_CLIMB_OUT;
         }
         
-        // Player has grabbed gold
-        if (w.hasGold()) {
-            return REW_GRAB_GOLD;
+        // Wasting time doing 'Climb' action
+        if (worldAction.equals(World.A_CLIMB)) {
+            return REW_WASTE_TIME;
         }
         
         // Player stepped into Wumpus
@@ -100,6 +127,28 @@ public class WumpusEnv {
         // Player has fallen into pit
         if (!oldPitFlag && newPitFlag) {
             return REW_PIT;
+        }
+        
+        // Player is wasting time shooting with no arrow left
+        if (worldAction.equals(World.A_SHOOT) && !oldArrowFlag) {
+            return REW_WASTE_TIME;
+        }
+        
+        // Player wastes his arrow shot
+        if (worldAction.equals(World.A_SHOOT)) {
+            if (oldInStench && newInStench) { // Didn't kill Wumpus (in stench, but faced wrong way)
+                return REW_WASTE_ARROW;
+            }
+            
+            if (!oldInStench) { // Didn't kill Wumpus (not in a stench tile)
+                return REW_WASTE_ARROW;
+            }
+        }
+        
+        // Player wastes time trying to go past X,Y boundaries
+        // (i.e. doesn't move anywhere)
+        if (worldAction.equals(World.A_MOVE) && oldX == newX && oldY == newY) {
+            return REW_WASTE_TIME;
         }
         
         return 0.0;
@@ -118,7 +167,7 @@ public class WumpusEnv {
     }
     
     /**
-     * Select action via e-greedy Q-Value method
+     * Select action for training step
      * The greater eps is, the greater chance for random action
      * The lesser eps is, the greater chance for taking best Q-value action
      * @param eps e-greedy epsilon
@@ -127,6 +176,15 @@ public class WumpusEnv {
     private int selectAction(QState state, Double eps) {
         Double chance = rand.nextDouble();
         
+        // Full exploration setting
+        if (ENABLE_FULL_EXPLORATION) {
+            for (int i = 0; i < 6; i++) {
+                if (state.actionQValues[i].equals(QState.DEFAULT_VAL)) {
+                    return i;
+                }
+            }
+        }
+        
         // Using epsilon (0.0 .. 1.0), determine whether to take random action
         // ... or take best Q-value action
         if (eps > chance) {
@@ -134,7 +192,7 @@ public class WumpusEnv {
         } else {
             return state.argmaxAction();
         }
-    } 
+    }
     
     /**
      * Make episode step using e-greedy Q-learning, updating QTable with results
@@ -152,7 +210,7 @@ public class WumpusEnv {
         
         // Update Q-value for current state with selected action if there was previous Q-value
         // If there wasn't previous Q-value, then initialize it with first reward
-        if (state.actionQValues[action] > Double.MIN_VALUE) {
+        if (!state.actionQValues[action].equals(QState.DEFAULT_VAL)) {
             // Q-learning formula
             // s - current state, a - current state taken action
             // sn - next state, an[] - all next state actions
@@ -175,9 +233,15 @@ public class WumpusEnv {
      */
     public void trainEpisode(Double eps, WorldMap map) {
         World w = map.generateWorld();
+        int actionsTaken = 0;
         
         while (!w.gameOver()) {
             this.step(w, eps);
+            actionsTaken++;
+            
+            if (actionsTaken > MAX_EP_LEN) {
+                break;
+            }
         }
     }
 }

@@ -5,7 +5,6 @@
  */
 package wumpusworld;
 
-import java.util.ArrayList;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
@@ -17,6 +16,9 @@ public class QState {
     public static final int BYTE_SIZE = 66; // 1 + 1 + 16 + 6*8
     public static final int KEY_SIZE = 18;  // 1 + 1 + 16;
     
+    // Default Q-value indicating that it is uninitialized
+    public static final Double DEFAULT_VAL = Double.NEGATIVE_INFINITY;
+    
     // Tile state bitmask flags
     public static final byte UNEXPLORED = 0;  // 0000 0000
     public static final byte EXPLORED   = 1;  // 0000 0001
@@ -27,6 +29,7 @@ public class QState {
     public static final byte GLITTER    = 32; // 0010 0000     
     
     // QState's parsed data    
+    public byte hasFallenIntoPit; // Fallen-Into-Pit flag
     public byte playerD; // Player Direction (see: Player Directions constants)
     public byte playerX; // Player X axis coord (1..4)
     public byte playerY; // Player Y axis coord (1..4)
@@ -40,10 +43,10 @@ public class QState {
         byte[] keyBuf = new byte[KEY_SIZE];        
         int keyItr = 0;
         
-        // PlayerDirection
-        keyBuf[keyItr++] = this.playerD; 
+        // HasFallenIntoPit, PlayerDirection
+        keyBuf[keyItr++] = (byte)((this.hasFallenIntoPit << 3) | this.playerD); 
         // HasArrow, PlayerY, PlayerX
-        keyBuf[keyItr++] = (byte) ((this.hasArrow << 7) + (this.playerY << 3) + this.playerX); 
+        keyBuf[keyItr++] = (byte) ((this.hasArrow << 6) | (this.playerY << 3) | this.playerX); 
         // TileData
         for (int i = 0; i < 16; i++) {
             keyBuf[keyItr++] = this.tileData[i];
@@ -70,7 +73,9 @@ public class QState {
         int byteItr = 0;      
         
         // PlayerDirection
-        res.playerD = bytes[byteItr++];
+        res.hasFallenIntoPit = (byte)((bytes[byteItr] >> 3) & 1);
+        res.playerD = (byte)(bytes[byteItr] & 7);
+        byteItr++;
         
         // PlayerX, PlayerY, HasArrow
         // Stored bites in the byte: 0AYY YXXX
@@ -112,8 +117,8 @@ public class QState {
         byte[] doubleBuf = new byte[8];
         int resItr = 0;
         
-        // PlayerDirection
-        res[resItr++] = state.playerD; 
+        // HasFallenIntoPit, PlayerDirection
+        res[resItr++] = (byte)((state.hasFallenIntoPit << 3) | state.playerD);  
         // HasArrow, PlayerY, PlayerX
         res[resItr++] = (byte) ((state.hasArrow << 6) + (state.playerY << 3) + state.playerX); 
         // TileData
@@ -141,13 +146,15 @@ public class QState {
      * @return highest QValue
      */
     public Double argmaxValue() {
-        Double max = Double.MIN_VALUE;
+        Double max = 0.0;
         
         for (int i = 0; i < 6; i++) {
-            max = (this.actionQValues[i] > max) ? this.actionQValues[i] : max;
+            Double val = this.actionQValues[i];
+            val = (val.equals(DEFAULT_VAL)) ? 0.0 : val;
+            max = (val > max) ? val : max;
         }
         
-        return (max > Double.MIN_VALUE) ? max : 0.0;
+        return max;
     }
     
     /**
@@ -157,15 +164,32 @@ public class QState {
     public int argmaxAction() {
         int bestAction = 0;
         Double max = this.actionQValues[0];
+        max = (max.equals(DEFAULT_VAL)) ? 0.0 : max;
         
         for (int i = 0; i < 6; i++) {
-            if (this.actionQValues[i] > max) {
+            Double val = this.actionQValues[i];
+            val = (val.equals(DEFAULT_VAL)) ? 0.0 : val;            
+            if (val > max) {
                 bestAction = i;
-                max = this.actionQValues[i];
+                max = val;
             }
         }
         
         return bestAction;
+    }
+    
+    /**
+     * Get actual end-result Q-Values (converting uninitialized values to 0.0)
+     * @return QValue Double array
+     */
+    public Double[] getQValues() {
+        Double[] values = new Double[6];
+        for (int i = 0; i < 6; i++) {
+            Double val = this.actionQValues[i];
+            val = (val.equals(DEFAULT_VAL)) ? 0.0 : val;
+            values[i] = val;
+        }
+        return values;
     }
     
     /**
