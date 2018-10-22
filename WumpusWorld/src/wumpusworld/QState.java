@@ -19,7 +19,7 @@ public class QState {
     
     // Tile state bitmask flags
     public static final byte UNEXPLORED = 0;  // 0000 0000
-    public static final byte EMPTY      = 1;  // 0000 0001
+    public static final byte EXPLORED   = 1;  // 0000 0001
     public static final byte BREEZE     = 2;  // 0000 0010
     public static final byte STENCH     = 4;  // 0000 0100
     public static final byte PIT        = 8;  // 0000 1000    
@@ -27,7 +27,7 @@ public class QState {
     public static final byte GLITTER    = 32; // 0010 0000     
     
     // QState's parsed data    
-    public byte playerD; // Player Direction (1 = Right, 2 = Up, 3 = Left, 4 = Down)
+    public byte playerD; // Player Direction (see: Player Directions constants)
     public byte playerX; // Player X axis coord (1..4)
     public byte playerY; // Player Y axis coord (1..4)
     public byte hasArrow; // Player arrow flag bit
@@ -134,4 +134,61 @@ public class QState {
         }
         return res;
     }
+    
+    /**
+     * Get highest QValue possible from this state's actions
+     * If no action Q-values have been initialized, then return 0.0
+     * @return highest QValue
+     */
+    public Double argmaxValue() {
+        Double max = Double.MIN_VALUE;
+        
+        for (int i = 0; i < 6; i++) {
+            max = (this.actionQValues[i] > max) ? this.actionQValues[i] : max;
+        }
+        
+        return (max > Double.MIN_VALUE) ? max : 0.0;
+    }
+    
+    /**
+     * Get best action by highest Q value
+     * @return best action
+     */
+    public int argmaxAction() {
+        int bestAction = 0;
+        Double max = this.actionQValues[0];
+        
+        for (int i = 0; i < 6; i++) {
+            if (this.actionQValues[i] > max) {
+                bestAction = i;
+                max = this.actionQValues[i];
+            }
+        }
+        
+        return bestAction;
+    }
+    
+    /**
+     * Resolve QState action index to World action
+     * @param action action index
+     * @return World action
+     */
+    public static String resolveToWorldAction(int action) {
+        switch (action) {
+            case 0:
+                return World.A_TURN_LEFT;
+            case 1:
+                return World.A_MOVE;
+            case 2:
+                return World.A_TURN_RIGHT;
+            case 3:
+                return World.A_GRAB;
+            case 4:
+                return World.A_CLIMB;
+            case 5:
+                return World.A_SHOOT;
+            default:
+                return World.A_MOVE;
+        }
+    }    
 }
