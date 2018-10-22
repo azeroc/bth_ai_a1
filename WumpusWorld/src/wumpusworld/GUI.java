@@ -18,6 +18,7 @@ public class GUI implements ActionListener
     private JPanel gamepanel;
     private JLabel score;
     private JLabel status;
+    private JLabel mapListLabel;
     private World w;
     private Agent agent;
     private JPanel[][] blocks;
@@ -111,10 +112,14 @@ public class GUI implements ActionListener
     private void createWindow()
     {
         frame = new JFrame("Wumpus World");
-        frame.setSize(1080, 640);
-        frame.getContentPane().setLayout(new FlowLayout());
+        frame.setSize(980, 660);
+        frame.getContentPane().setLayout(new GridBagLayout());        
         frame.setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
-        
+        GridBagConstraints frameGBC = new GridBagConstraints();
+        frameGBC.insets = new Insets(10, 10, 10, 10);
+        frameGBC.ipadx = 10;
+        frameGBC.anchor = GridBagConstraints.NORTHWEST;
+       
         gamepanel = new JPanel();
         gamepanel.setPreferredSize(new Dimension(600,600));
         gamepanel.setBackground(Color.GRAY);
@@ -134,72 +139,115 @@ public class GUI implements ActionListener
                 gamepanel.add(blocks[i][j]);
             }
         }
-        frame.getContentPane().add(gamepanel);
+        frameGBC.gridx = 0; frameGBC.gridy = 0;
+        frame.getContentPane().add(gamepanel, frameGBC);
         
         //Add buttons panel
         JPanel buttons = new JPanel();
         buttons.setPreferredSize(new Dimension(300,600));
-        buttons.setLayout(new FlowLayout());
-        //Status label
+        buttons.setLayout(new GridBagLayout());
+        // Set GridBagConstraints
+        GridBagConstraints buttonsGBC = new GridBagConstraints();
+        buttonsGBC.insets = new Insets(5, 1, 5, 1);   
+        buttonsGBC.fill = GridBagConstraints.HORIZONTAL;
+        // === Button Labels ===
+        // Label - Status
         status = new JLabel("", SwingConstants.CENTER);
         status.setPreferredSize(new Dimension(200,25));
-        buttons.add(status);
-        //Score label
+        buttonsGBC.gridx = 0; buttonsGBC.gridy = 0;
+        buttons.add(status, buttonsGBC);
+        
+        // Label - Score
         score = new JLabel("Score: 0", SwingConstants.CENTER);
         score.setPreferredSize(new Dimension(200,25));
-        buttons.add(score);
-        //Buttons
+        buttonsGBC.gridx = 1; buttonsGBC.gridy = 0;
+        buttons.add(score, buttonsGBC);
+        
+        // Label - Map List
+        mapListLabel = new JLabel("Map list: ", SwingConstants.CENTER);
+        mapListLabel.setPreferredSize(new Dimension(200,25));
+        buttonsGBC.gridx = 0; buttonsGBC.gridy = 4;
+        buttons.add(mapListLabel, buttonsGBC);          
+        
+        // === Buttons ===
+        // Button - Turn Left
         JButton bl = new JButton(new ImageIcon("gfx/TL.png"));
         bl.setActionCommand("TL");
-        bl.addActionListener(this);
-        buttons.add(bl);
+        bl.addActionListener(this);        
+        buttonsGBC.gridx = 0; buttonsGBC.gridy = 1;
+        buttons.add(bl, buttonsGBC);
+        
+        // Button - Move Forward
         JButton bf = new JButton(new ImageIcon("gfx/MF.png"));
         bf.setActionCommand("MF");
         bf.addActionListener(this);
-        buttons.add(bf);
+        buttonsGBC.gridx = 1; buttonsGBC.gridy = 1;
+        buttons.add(bf, buttonsGBC);
+        
+        // Button - Turn Right
         JButton br = new JButton(new ImageIcon("gfx/TR.png"));
         br.setActionCommand("TR");
         br.addActionListener(this);
-        buttons.add(br);
+        buttonsGBC.gridx = 2; buttonsGBC.gridy = 1;
+        buttons.add(br, buttonsGBC);
+        
+        // Button - Grab
         JButton bg = new JButton("Grab");
         bg.setPreferredSize(new Dimension(80,22));
         bg.setActionCommand("GRAB");
         bg.addActionListener(this);
-        buttons.add(bg);
+        buttonsGBC.gridx = 0; buttonsGBC.gridy = 2;
+        buttons.add(bg, buttonsGBC);
+        
+        // Button - Climb
         JButton bc = new JButton("Climb");
         bc.setPreferredSize(new Dimension(80,22));
         bc.setActionCommand("CLIMB");
         bc.addActionListener(this);
-        buttons.add(bc);
+        buttonsGBC.gridx = 1; buttonsGBC.gridy = 2;
+        buttons.add(bc, buttonsGBC);
+        
+        // Button - Shoot
         JButton bs = new JButton("Shoot");
         bs.setPreferredSize(new Dimension(80,22));
         bs.setActionCommand("SHOOT");
         bs.addActionListener(this);
-        buttons.add(bs);
+        buttonsGBC.gridx = 2; buttonsGBC.gridy = 2;
+        buttons.add(bs, buttonsGBC);
+        
+        // Button - Run Solving Agent
         JButton ba = new JButton("Run Solving Agent");
         ba.setActionCommand("AGENT");
         ba.addActionListener(this);
-        buttons.add(ba);
-        //Add a delimiter
-        JLabel l = new JLabel("");
-        l.setPreferredSize(new Dimension(200,25));
-        buttons.add(l);
-        //Fill dropdown list
-        Vector<String> items = new Vector<String>();
+        buttonsGBC.gridx = 1; buttonsGBC.gridy = 3;
+        buttons.add(ba, buttonsGBC);      
+
+        // Dropdown-List - Map List
+        Vector<String> items = new Vector<>();
         for (int i = 0; i < maps.size(); i++)
         {
             items.add((i+1) + "");
         }
         items.add("Random");
         mapList = new JComboBox(items);
-        mapList.setPreferredSize(new Dimension(180,25));
-        buttons.add(mapList);
+        mapList.setPreferredSize(new Dimension(200,25));
+        buttonsGBC.gridx = 1; buttonsGBC.gridy = 4;
+        buttons.add(mapList, buttonsGBC);
+        
+        // Button - New Game
         JButton bn = new JButton("New Game");
         bn.setActionCommand("NEW");
         bn.addActionListener(this);
-        buttons.add(bn);
+        buttonsGBC.gridx = 2; buttonsGBC.gridy = 4;
+        buttons.add(bn, buttonsGBC);        
         
-        frame.getContentPane().add(buttons);
+        // Hackfix: Push JPanel contents to top
+        buttonsGBC.gridx = 0; buttonsGBC.gridy = 5;
+        buttonsGBC.weighty = 1.0;
+        buttons.add(new JLabel(" "), buttonsGBC);
+        
+        frameGBC.gridx = 1; frameGBC.gridy = 0;
+        frame.getContentPane().add(buttons, frameGBC);
         
         updateGame();
         

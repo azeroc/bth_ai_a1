@@ -161,7 +161,6 @@ public class WumpusEnv {
         } else {
             state.actionQValues[action] = reward;
         }
-
         
         // Because parseQState will give ref which is stored in QTable (one way or another)
         // ... then there is no need to re-insert it into table, we are simply
