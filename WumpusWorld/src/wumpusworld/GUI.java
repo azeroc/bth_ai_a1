@@ -28,6 +28,11 @@ public class GUI implements ActionListener
     private JTextField[] stateQValueFields;
     private JTextField stateBestAction;
     private JTextField trainEpisodesField;
+    private JTextField trainAlphaField;
+    private JTextField trainGammaField;
+    private JTextField trainEpsStartField;
+    private JTextField trainEpsMinField;
+    private JTextField trainEpsDecayField;
     private World w;
     private WumpusEnv env;
     private Agent agent;
@@ -160,6 +165,7 @@ public class GUI implements ActionListener
         JPanel trainingUI = initTrainingUI();
         frameGBC.gridx = 2; frameGBC.gridy = 0;
         frameGBC.weightx = 1.0;
+        frameGBC.gridheight = 2;
         frame.getContentPane().add(trainingUI, frameGBC);
         
         updateGame();
@@ -421,12 +427,55 @@ public class GUI implements ActionListener
         // Label - Train Episodes
         JLabel labelTrainEpisodes = new JLabel("Train episodes per map: ", SwingConstants.LEFT);    
         gbc.gridy = 0; trainingPanel.add(labelTrainEpisodes, gbc);
+        // Label - Train Alpha
+        JLabel labelTrainAlpha = new JLabel("Learning Rate: ", SwingConstants.LEFT);    
+        gbc.gridy = 1; trainingPanel.add(labelTrainAlpha, gbc);        
+        // Label - Train Episodes
+        JLabel labelTrainGamma = new JLabel("Discount factor: ", SwingConstants.LEFT);    
+        gbc.gridy = 2; trainingPanel.add(labelTrainGamma, gbc);        
+        // Label - Epsilon start
+        JLabel labelEpsilonStart = new JLabel("Epsilon Start: ", SwingConstants.LEFT);    
+        gbc.gridy = 3; trainingPanel.add(labelEpsilonStart, gbc);
+        // Label - Epsilon min
+        JLabel labelEpsilonMin = new JLabel("Epsilon Min: ", SwingConstants.LEFT);    
+        gbc.gridy = 4; trainingPanel.add(labelEpsilonMin, gbc);        
+        // Label - Epsilon decay
+        JLabel labelEpsilonDecay = new JLabel("Epsilon L-Decay:", SwingConstants.LEFT);    
+        gbc.gridy = 5; trainingPanel.add(labelEpsilonDecay, gbc);      
+        // Label - Epsilon decay (help)
+        JTextArea textAreaEpsilonDecayHelp = new JTextArea(
+                "Linear epsilon decay over episode steps:" + 
+                "\ndecayStep = 1.0 / (trainEpisodes * L-Decay)" + 
+                "\neps = eps - decayStep\n" +
+                "\nLow L-decay: Faster linear eps decrease" +
+                "\nHigh L-decay: Slower linear eps decrease");
+        textAreaEpsilonDecayHelp.setEditable(false);
+        textAreaEpsilonDecayHelp.setLineWrap(true);
+        textAreaEpsilonDecayHelp.setPreferredSize(new Dimension(200,100));
+        gbc.gridwidth = 2;
+        gbc.gridy = 6; trainingPanel.add(textAreaEpsilonDecayHelp, gbc);
+        gbc.gridwidth = 1;
         
         // = TEXT FIELDS =
         gbc.gridx = 1; gbc.weightx = 1.0; gbc.weighty = 0.0;        
         // TextField - Train Episodes
         trainEpisodesField = new JTextField("1000000");
         gbc.gridy = 0; trainingPanel.add(trainEpisodesField, gbc);
+        // TextField - Train Alpha
+        trainAlphaField = new JTextField("0.01");
+        gbc.gridy = 1; trainingPanel.add(trainAlphaField, gbc);
+        // TextField - Train Gamma
+        trainGammaField = new JTextField("0.99");
+        gbc.gridy = 2; trainingPanel.add(trainGammaField, gbc);        
+        // TextField - Epsilon start
+        trainEpsStartField = new JTextField("0.9");
+        gbc.gridy = 3; trainingPanel.add(trainEpsStartField, gbc);
+        // TextField - Epsilon min
+        trainEpsMinField = new JTextField("0.1");
+        gbc.gridy = 4; trainingPanel.add(trainEpsMinField, gbc);
+        // TextField - Epsilon decay
+        trainEpsDecayField = new JTextField("0.8");
+        gbc.gridy = 5; trainingPanel.add(trainEpsDecayField, gbc);        
         
         // = BUTTONS =
         gbc.gridx = 0; gbc.weightx = 1.0; gbc.weighty = 0.0; gbc.gridwidth = 2;
@@ -434,12 +483,12 @@ public class GUI implements ActionListener
         JButton trainSelectedBtn = new JButton("Train: Selected map");
         trainSelectedBtn.setActionCommand("TRAIN_SELECTED");
         trainSelectedBtn.addActionListener(this);
-        gbc.gridy = 1; trainingPanel.add(trainSelectedBtn, gbc);        
+        gbc.gridy = 7; trainingPanel.add(trainSelectedBtn, gbc);        
         // Button - Train: Premade maps
         JButton trainPremadeBtn = new JButton("Train: Premade maps");
         trainPremadeBtn.setActionCommand("TRAIN_PREMADE");
         trainPremadeBtn.addActionListener(this);
-        gbc.gridy = 2; trainingPanel.add(trainPremadeBtn, gbc);
+        gbc.gridy = 8; trainingPanel.add(trainPremadeBtn, gbc);
         
         return trainingPanel;
     }
@@ -549,18 +598,29 @@ public class GUI implements ActionListener
             e.getActionCommand().equals("TRAIN_PREMADE"))
         {
             WorldMap map;
-            Double epsStart = 0.9;
-            Double epsMin = 0.1;
-            Double eps = 0.9;                      
+            Double alpha;
+            Double gamma;
+            Double epsStart;
+            Double epsMin;
+            Double epsLDecay;                      
             int trainEpisodes;
             
             // Parse training params
             try {
-                String trainEpStr = trainEpisodesField.getText();
-                trainEpStr = trainEpStr.replaceAll("\\s+", "");
+                String trainEpStr = trainEpisodesField.getText().replaceAll("\\s+", "");
+                String alphaStr = trainAlphaField.getText().replaceAll("\\s+", "");
+                String gammaStr = trainGammaField.getText().replaceAll("\\s+", "");
+                String epsStartStr = trainEpsStartField.getText().replaceAll("\\s+", "");
+                String epsMinStr = trainEpsMinField.getText().replaceAll("\\s+", "");
+                String epsDecayStr = trainEpsDecayField.getText().replaceAll("\\s+", "");
                 trainEpisodes = Integer.parseInt(trainEpStr);
+                alpha = Double.parseDouble(alphaStr);
+                gamma = Double.parseDouble(gammaStr);
+                epsStart = Double.parseDouble(epsStartStr);
+                epsMin = Double.parseDouble(epsMinStr);
+                epsLDecay = Double.parseDouble(epsDecayStr);
             } catch (NumberFormatException nfe) {
-                JOptionPane.showMessageDialog(frame, "Invalid integer format for 'Train episodes' field.", "Training error", JOptionPane.ERROR_MESSAGE);
+                JOptionPane.showMessageDialog(frame, "Invalid number format for one or more of the training field values", "Training error", JOptionPane.ERROR_MESSAGE);
                 return;
             }
             
@@ -568,13 +628,27 @@ public class GUI implements ActionListener
             if (trainEpisodes < 1) {
                 JOptionPane.showMessageDialog(frame, "'Train episodes' field must contain integer value above 0.", "Training error", JOptionPane.ERROR_MESSAGE);
                 return;
+            }                   
+            if (alpha <= 0.0    || alpha >= 1.0     || 
+                gamma <= 0.0    || gamma >= 1.0    || 
+                epsStart <= 0.0  || epsStart >= 1.0 ||
+                epsMin <= 0.0    || epsMin >= 1.0   ||
+                epsLDecay <= 0.0) {
+                JOptionPane.showMessageDialog(frame, "Invalid values for learning parameter fields", "Training error", JOptionPane.ERROR_MESSAGE);
+                return;
             }
             
-            // Setup epsilon decay
-            Double epsDecay = 1.0 / (trainEpisodes * 0.8);
-            
-            // === TRAINING ===
-            System.out.println("=== TRAINING STARTED ===");
+            // === TRAINING ===                 
+            Double eps;
+            Double epsDecayStep = 1.0 / (trainEpisodes * epsLDecay);
+            System.out.println("=== TRAINING STARTED ==="); 
+            System.out.printf("trainEpisodes = %d\n", trainEpisodes);
+            System.out.printf("alpha         = %f\n", alpha);
+            System.out.printf("gamma         = %f\n", gamma);
+            System.out.printf("epsStart      = %f\n", epsStart);
+            System.out.printf("epsMin        = %f\n", epsMin);
+            System.out.printf("epsLDecay     = %f\n", epsLDecay);
+            System.out.printf("epsDecayStep  = %f\n", epsDecayStep);
             
             if (e.getActionCommand().equals("TRAIN_SELECTED")) {
                 // Current map training
@@ -592,24 +666,25 @@ public class GUI implements ActionListener
                 
                 eps = epsStart;
                 for (int j = 0; j < trainEpisodes; j++) {
-                    eps = eps - epsDecay;
+                    eps = eps - epsDecayStep;
                     eps = (eps < epsMin) ? 0.1 : eps;
-                    env.trainEpisode(eps, map);
+                    env.trainEpisode(alpha, gamma, eps, map);
                 }
                 
-                System.out.printf("> ... done training through %d episodes on current map\n", trainEpisodes);
+                System.out.printf("> ... done training through %d episodes on current map (epsilon after training: %f)\n", trainEpisodes, eps);
             } else if (e.getActionCommand().equals("TRAIN_PREMADE")) {
                 // Premade map training                
                 for (int i = 0; i < 7; i++) {
                     System.out.printf("> Started training on premade map %d/7 ...\n", i+1);
                     map = maps.get(i);
+                    eps = epsStart;
 
                     for (int j = 0; j < trainEpisodes; j++) {
-                        eps = eps - epsDecay;
+                        eps = eps - epsDecayStep;
                         eps = (eps < epsMin) ? 0.1 : eps;
-                        env.trainEpisode(eps, map);
+                        env.trainEpisode(alpha, gamma, eps, map);
                     }
-                    System.out.printf("> ... done training through %d episodes on premade map %d/7\n", trainEpisodes, i+1);
+                    System.out.printf("> ... done training through %d episodes on premade map %d/7 (epsilon after training: %f)\n", trainEpisodes, i+1, eps);
                 }
             }
                       

@@ -12,12 +12,8 @@ import java.util.Random;
  * @author Azeroc
  */
 public class WumpusEnv {
-    // SPECIAL SETTINGS
+    // LEARNING ENVIRONMENT SETTINGS
     private static final boolean ENABLE_FULL_EXPLORATION = true; // Encourages to fill missing Q-values for actions at least once
-    
-    // LEARNING PARAMS
-    public static final Double ALPHA = 0.01; // Learning Rate
-    public static final Double GAMMA = 0.99; // Reward discount
     public static final int MAX_EP_LEN = 10000; // Max episode length (Max actions per episode)
     
     // ACTION REWARD CONSTANTS
@@ -199,7 +195,7 @@ public class WumpusEnv {
      * @param w World object
      * @param action QState action index
      */
-    private void step(World w, Double eps) {
+    private void step(World w, Double eps, Double gamma, Double alpha) {
         QTable qt = QTable.getInstance();
         QState state = qt.getQStateFromWorld(w); // Current state
         int action = selectAction(state, eps); // Select action in current state
@@ -215,7 +211,7 @@ public class WumpusEnv {
             // s - current state, a - current state taken action
             // sn - next state, an[] - all next state actions
             // Q(s, a) = (1 - ALPHA) * Q(s, a) + ALPHA * ( REWARD + GAMMA * max(Q(sn, an[])) )
-            state.actionQValues[action] = (1.0 - ALPHA) * currentVal + ALPHA * (reward + GAMMA * futureMaxVal);
+            state.actionQValues[action] = (1.0 - alpha) * currentVal + alpha * (reward + gamma * futureMaxVal);
         } else {
             state.actionQValues[action] = reward;
         }
@@ -228,15 +224,17 @@ public class WumpusEnv {
     // === Public methods ===
     /**
      * Train episode using e-greedy Q-Learning
+     * @param alpha Learning rate
+     * @param gamma Discount factor
      * @param eps e-greedy epsilon
      * @param map WorldMap to train on
      */
-    public void trainEpisode(Double eps, WorldMap map) {
+    public void trainEpisode(Double alpha, Double gamma, Double eps, WorldMap map) {
         World w = map.generateWorld();
         int actionsTaken = 0;
         
         while (!w.gameOver()) {
-            this.step(w, eps);
+            this.step(w, eps, gamma, alpha);
             actionsTaken++;
             
             if (actionsTaken > MAX_EP_LEN) {
