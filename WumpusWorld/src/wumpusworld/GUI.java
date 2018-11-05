@@ -356,20 +356,18 @@ public class GUI implements ActionListener
         gbc2.gridx = 0; gbc2.weightx = 0.0; gbc2.weighty = 0.0;
         JLabel labelState = new JLabel("State: ", SwingConstants.LEFT);
         gbc2.gridy = 0; currentStatePanel.add(labelState, gbc2);
-        JLabel labelQValAction0 = new JLabel("[0] Action - TL: ", SwingConstants.LEFT);
+        JLabel labelQValAction0 = new JLabel("[0] Action - FW: ", SwingConstants.LEFT);
         gbc2.gridy = 1; currentStatePanel.add(labelQValAction0, gbc2);
-        JLabel labelQValAction1 = new JLabel("[1] Action - FW: ", SwingConstants.LEFT);
+        JLabel labelQValAction1 = new JLabel("[1] Action - TL: ", SwingConstants.LEFT);
         gbc2.gridy = 2; currentStatePanel.add(labelQValAction1, gbc2);
-        JLabel labelQValAction2 = new JLabel("[2] Action - TR: ", SwingConstants.LEFT);
+        JLabel labelQValAction2 = new JLabel("[2] Action - GR: ", SwingConstants.LEFT);
         gbc2.gridy = 3; currentStatePanel.add(labelQValAction2, gbc2);
-        JLabel labelQValAction3 = new JLabel("[3] Action - GR: ", SwingConstants.LEFT);
+        JLabel labelQValAction3 = new JLabel("[3] Action - CL: ", SwingConstants.LEFT);
         gbc2.gridy = 4; currentStatePanel.add(labelQValAction3, gbc2);
-        JLabel labelQValAction4 = new JLabel("[4] Action - CL: ", SwingConstants.LEFT);
+        JLabel labelQValAction4 = new JLabel("[4] Action - SH: ", SwingConstants.LEFT);
         gbc2.gridy = 5; currentStatePanel.add(labelQValAction4, gbc2);
-        JLabel labelQValAction5 = new JLabel("[5] Action - SH: ", SwingConstants.LEFT);
-        gbc2.gridy = 6; currentStatePanel.add(labelQValAction5, gbc2);
         JLabel labelQValActionBest = new JLabel("Best Action: ", SwingConstants.LEFT);
-        gbc2.gridy = 7; currentStatePanel.add(labelQValActionBest, gbc2);
+        gbc2.gridy = 6; currentStatePanel.add(labelQValActionBest, gbc2);
         
         // State text field
         stateField = new JTextField();
@@ -378,8 +376,8 @@ public class GUI implements ActionListener
         currentStatePanel.add(stateField, gbc2);        
         
         // QValue text fields
-        stateQValueFields = new JTextField[6];
-        for (int i = 0; i < 6; i++) {
+        stateQValueFields = new JTextField[QState.Q_ARR_SIZE];
+        for (int i = 0; i < QState.Q_ARR_SIZE; i++) {
             stateQValueFields[i] = new JTextField();
             stateQValueFields[i].setEditable(false);
             gbc2.gridx = 1; gbc2.gridy = i+1; gbc2.weightx = 1.0;
@@ -508,7 +506,7 @@ public class GUI implements ActionListener
         
         // Update Current QState value fields
         Double[] actualQValues = currentState.getQValues();
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < QState.Q_ARR_SIZE; i++) {
             Double qval = actualQValues[i];
             stateQValueFields[i].setText(qval.toString());       
         }
@@ -518,8 +516,7 @@ public class GUI implements ActionListener
         
         // Debug printout
         System.out.println();
-        System.out.printf("IsInPit: %d, D: %d, X: %d, Y: %d, HasArrow: %d\n", 
-                currentState.hasFallenIntoPit, currentState.playerD, currentState.playerX, currentState.playerY, currentState.hasArrow);
+        System.out.printf("X: %d, Y: %d, D: %d\n", w.getPlayerX(), w.getPlayerY(), w.getDirection());
         System.out.println("State: " + Arrays.toString(currentState.getKey().getBytes(StandardCharsets.US_ASCII)));
         System.out.println("QValues (raw): " + Arrays.toString(currentState.actionQValues));
     }

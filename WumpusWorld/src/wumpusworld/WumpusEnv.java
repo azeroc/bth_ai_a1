@@ -66,12 +66,12 @@ public class WumpusEnv {
     }
     
     /**
-     * Resolve special consequences from taking given action in World w
+     * Take action in World and observe reward from taking it
      * @param w World object
      * @param action QState action index
-     * @return Reward
+     * @return Reward of action consequence
      */
-    private Double resolveConsequenceReward(World w, int action) {
+    private Double observeAction(World w, int action) {        
         String worldAction = QState.resolveToWorldAction(action);
         
         // Get pre-action state
@@ -151,18 +151,6 @@ public class WumpusEnv {
     }
     
     /**
-     * Take action in World and observe reward from taking it
-     * @param w World object
-     * @param action QState action index
-     * @return Action reward + Consequences reward
-     */
-    private Double observeAction(World w, int action) {        
-        Double act_rew = resolveActionReward(action);
-        Double consequence_rew = resolveConsequenceReward(w, action);
-        return act_rew + consequence_rew;
-    }
-    
-    /**
      * Select action for training step
      * The greater eps is, the greater chance for random action
      * The lesser eps is, the greater chance for taking best Q-value action
@@ -174,7 +162,7 @@ public class WumpusEnv {
         
         // Full exploration setting
         if (ENABLE_FULL_EXPLORATION) {
-            for (int i = 0; i < 6; i++) {
+            for (int i = 0; i < QState.Q_ARR_SIZE; i++) {
                 if (state.actionQValues[i].equals(QState.DEFAULT_VAL)) {
                     return i;
                 }
@@ -184,7 +172,7 @@ public class WumpusEnv {
         // Using epsilon (0.0 .. 1.0), determine whether to take random action
         // ... or take best Q-value action
         if (eps > chance) {
-            return rand.nextInt(6);
+            return rand.nextInt(5);
         } else {
             return state.argmaxAction();
         }

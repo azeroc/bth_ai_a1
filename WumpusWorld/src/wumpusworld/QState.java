@@ -13,29 +13,36 @@ import java.nio.charset.StandardCharsets;
  * @author Azeroc
  */
 public class QState {
-    public static final int BYTE_SIZE = 66; // 1 + 1 + 16 + 6*8
-    public static final int KEY_SIZE = 18;  // 1 + 1 + 16;
+    public static final int TILE_ARR_SIZE = 9;
+    public static final int Q_ARR_SIZE = 5;
+    public static final int KEY_SIZE = 1 + 1 + TILE_ARR_SIZE;
+    public static final int BYTE_SIZE = KEY_SIZE + (Q_ARR_SIZE * 8);
     
     // Default Q-value indicating that it is uninitialized
     public static final Double DEFAULT_VAL = Double.NEGATIVE_INFINITY;
     
+    // Special state bitmask flags
+    public static final byte NORMAL     = 0;  // 0000 0000
+    public static final byte TAKE_RISKS = 1;  // 0000 0001
+    public static final byte IN_PIT     = 2;  // 0000 0010
+    public static final byte ON_GOLD    = 4;  // 0000 0100
+    public static final byte ON_WUMPUS  = 8;  // 0000 1000  
+    public static final byte HAS_ARROW   = 16; // 0001 0000
+    
     // Tile state bitmask flags
-    public static final byte UNEXPLORED = 0;  // 0000 0000
-    public static final byte EXPLORED   = 1;  // 0000 0001
-    public static final byte BREEZE     = 2;  // 0000 0010
-    public static final byte STENCH     = 4;  // 0000 0100
-    public static final byte PIT        = 8;  // 0000 1000    
-    public static final byte WUMPUS     = 16; // 0001 0000
-    public static final byte GLITTER    = 32; // 0010 0000     
+    public static final byte TILE_UNEXPLORED = 0;  // 0000 0000
+    public static final byte TILE_EXPLORED   = 1;  // 0000 0001
+    public static final byte TILE_BREEZE     = 2;  // 0000 0010
+    public static final byte TILE_STENCH     = 4;  // 0000 0100
+    public static final byte TILE_PIT        = 8;  // 0000 1000  
+    public static final byte TILE_WALL       = 16; // 0001 0000
+    public static final byte TILE_GLITTER    = 32; // 0010 0000
     
     // QState's parsed data    
-    public byte hasFallenIntoPit; // Fallen-Into-Pit flag
-    public byte playerD; // Player Direction (see: Player Directions constants)
-    public byte playerX; // Player X axis coord (1..4)
-    public byte playerY; // Player Y axis coord (1..4)
-    public byte hasArrow; // Player arrow flag bit
-    public byte tileData[]; // 16 tile data
-    public Double actionQValues[]; // 6 Doubles for the Q values of 6 actions
+    public byte specialData;
+    public byte direction; // Player Direction (see: Player Directions constants)
+    public byte tileData[]; // 3x3 tile data around player
+    public Double actionQValues[]; // 5 Doubles for the Q values of 5 actions
     
     // QEntry's key for QTable
     // Combination of parsed data into string with exception of actionQValues
@@ -43,12 +50,12 @@ public class QState {
         byte[] keyBuf = new byte[KEY_SIZE];        
         int keyItr = 0;
         
-        // HasFallenIntoPit, PlayerDirection
-        keyBuf[keyItr++] = (byte)((this.hasFallenIntoPit << 3) | this.playerD); 
-        // HasArrow, PlayerY, PlayerX
-        keyBuf[keyItr++] = (byte) ((this.hasArrow << 6) | (this.playerY << 3) | this.playerX); 
+        // Special flags
+        keyBuf[keyItr++] = this.specialData; 
+        // Direction
+        keyBuf[keyItr++] = this.direction; 
         // TileData
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < TILE_ARR_SIZE; i++) {
             keyBuf[keyItr++] = this.tileData[i];
         }
         
@@ -68,29 +75,23 @@ public class QState {
         
         byte[] doubleBuf = new byte[8];
         QState res = new QState();
-        res.tileData = new byte[16];
-        res.actionQValues = new Double[6];
+        res.tileData = new byte[TILE_ARR_SIZE];
+        res.actionQValues = new Double[Q_ARR_SIZE];
         int byteItr = 0;      
         
-        // PlayerDirection
-        res.hasFallenIntoPit = (byte)((bytes[byteItr] >> 3) & 1);
-        res.playerD = (byte)(bytes[byteItr] & 7);
-        byteItr++;
+        // Special bitmask flags byte
+        res.specialData = bytes[byteItr++];
         
-        // PlayerX, PlayerY, HasArrow
-        // Stored bites in the byte: 0AYY YXXX
-        res.playerX = (byte)(bytes[byteItr] & 7);
-        res.playerY = (byte)((bytes[byteItr] >> 3) & 7);
-        res.hasArrow = (byte)((bytes[byteItr] >> 6) & 1);
-        byteItr++;
+        // Player direction byte
+        res.direction = bytes[byteItr++];
         
         // Tile data
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < TILE_ARR_SIZE; i++) {
             res.tileData[i] = bytes[byteItr++];
         }
         
         // Action Q Values
-        for (int j = 0; j < 6; j++) {          
+        for (int j = 0; j < Q_ARR_SIZE; j++) {          
             doubleBuf[0] = bytes[byteItr++];
             doubleBuf[1] = bytes[byteItr++];
             doubleBuf[2] = bytes[byteItr++];
@@ -100,7 +101,7 @@ public class QState {
             doubleBuf[6] = bytes[byteItr++];
             doubleBuf[7] = bytes[byteItr++];            
             res.actionQValues[j] = ByteBuffer.wrap(doubleBuf).getDouble();
-        }        
+        }
         
         return res;
     }
@@ -117,16 +118,19 @@ public class QState {
         byte[] doubleBuf = new byte[8];
         int resItr = 0;
         
-        // HasFallenIntoPit, PlayerDirection
-        res[resItr++] = (byte)((state.hasFallenIntoPit << 3) | state.playerD);  
-        // HasArrow, PlayerY, PlayerX
-        res[resItr++] = (byte) ((state.hasArrow << 6) + (state.playerY << 3) + state.playerX); 
+        // Special bitmask flags byte
+        res[resItr++] = state.specialData;
+        
+        // Player direction byte
+        res[resItr++] = state.direction;
+        
         // TileData
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < TILE_ARR_SIZE; i++) {
             res[resItr++] = state.tileData[i];
         }
+        
         // Action Q Values
-        for (int j = 0; j < 6; j++) {
+        for (int j = 0; j < Q_ARR_SIZE; j++) {
             ByteBuffer.wrap(doubleBuf).putDouble(state.actionQValues[j]);
             res[resItr++] = doubleBuf[0];
             res[resItr++] = doubleBuf[1];
@@ -148,7 +152,7 @@ public class QState {
     public Double argmaxValue() {
         Double max = 0.0;
         
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < Q_ARR_SIZE; i++) {
             Double val = this.actionQValues[i];
             val = (val.equals(DEFAULT_VAL)) ? 0.0 : val;
             max = (val > max) ? val : max;
@@ -166,7 +170,7 @@ public class QState {
         Double max = this.actionQValues[0];
         max = (max.equals(DEFAULT_VAL)) ? 0.0 : max;
         
-        for (int i = 0; i < 6; i++) {
+        for (int i = 0; i < Q_ARR_SIZE; i++) {
             Double val = this.actionQValues[i];
             val = (val.equals(DEFAULT_VAL)) ? 0.0 : val;            
             if (val > max) {
@@ -183,13 +187,68 @@ public class QState {
      * @return QValue Double array
      */
     public Double[] getQValues() {
-        Double[] values = new Double[6];
-        for (int i = 0; i < 6; i++) {
+        Double[] values = new Double[Q_ARR_SIZE];
+        for (int i = 0; i < Q_ARR_SIZE; i++) {
             Double val = this.actionQValues[i];
             val = (val.equals(DEFAULT_VAL)) ? 0.0 : val;
             values[i] = val;
         }
         return values;
+    }
+    
+    public static byte parseTileData(World w, int x, int y) {
+        byte data = 0;
+        data = (byte)(data | (w.isUnknown(x, y) ? TILE_UNEXPLORED : 0));
+        data = (byte)(data | (w.isVisited(x, y) ? TILE_EXPLORED : 0));
+        data = (byte)(data | (w.hasBreeze(x, y) ? TILE_BREEZE : 0));
+        data = (byte)(data | (w.hasStench(x, y) ? TILE_STENCH : 0));
+        data = (byte)(data | (w.hasPit(x, y) ? TILE_PIT : 0));
+        data = (byte)(data | (!w.isValidPosition(x, y) ? TILE_WALL : 0));
+        return data;
+    }
+    
+    public static QState parseFromWorldState(World w) {
+        // Init vars
+        QState state = new QState(); 
+        state.tileData = new byte[TILE_ARR_SIZE];
+        state.actionQValues = new Double[Q_ARR_SIZE];
+        
+        // Get current world & player info
+        int x = w.getPlayerX();
+        int y = w.getPlayerY();
+        int d = w.getDirection();
+        boolean isInPit = w.isInPit();
+        boolean isOnGold = w.hasGlitter(x, y);
+        boolean isOnWumpus = w.hasWumpus(x, y);
+        boolean hasArrow = w.hasArrow();
+        
+        // Set special bitmask flags of QState
+        state.specialData = (byte)(state.specialData | (isInPit ? QState.IN_PIT : 0));
+        state.specialData = (byte)(state.specialData | (isOnGold ? QState.ON_GOLD : 0));
+        state.specialData = (byte)(state.specialData | (isOnWumpus ? QState.ON_WUMPUS : 0));
+        state.specialData = (byte)(state.specialData | (hasArrow ? QState.HAS_ARROW : 0));
+        
+        // Set player direction
+        state.direction = (byte)d;
+        
+        // Set tile data around player
+        // [0] - top-left, [8] - bottom-right
+        state.tileData[0] = parseTileData(w, x-1, y+1);
+        state.tileData[1] = parseTileData(w, x,   y+1);
+        state.tileData[2] = parseTileData(w, x+1, y+1);
+        state.tileData[3] = parseTileData(w, x-1, y);
+        state.tileData[4] = parseTileData(w, x,   y);
+        state.tileData[5] = parseTileData(w, x+1, y);
+        state.tileData[6] = parseTileData(w, x-1, y-1);
+        state.tileData[7] = parseTileData(w, x,   y-1);
+        state.tileData[8] = parseTileData(w, x+1, y-1); 
+        
+        // Default vals for Q Action-Values
+        for (int i = 0; i < Q_ARR_SIZE; i++) {
+            state.actionQValues[i] = DEFAULT_VAL;
+        }
+        
+        return state;
     }
     
     /**
@@ -200,16 +259,14 @@ public class QState {
     public static String resolveToWorldAction(int action) {
         switch (action) {
             case 0:
-                return World.A_TURN_LEFT;
-            case 1:
                 return World.A_MOVE;
+            case 1:
+                return World.A_TURN_LEFT;
             case 2:
-                return World.A_TURN_RIGHT;
-            case 3:
                 return World.A_GRAB;
-            case 4:
+            case 3:
                 return World.A_CLIMB;
-            case 5:
+            case 4:
                 return World.A_SHOOT;
             default:
                 return World.A_MOVE;
