@@ -44,6 +44,12 @@ public class QState {
     public byte tileData[]; // 3x3 tile data around player
     public Double actionQValues[]; // 5 Doubles for the Q values of 5 actions
     
+    private void zeroTileData() {
+        for (int i = 0; i < TILE_ARR_SIZE; i++) {
+            this.tileData[i] = 0;
+        }
+    }
+    
     // QEntry's key for QTable
     // Combination of parsed data into string with exception of actionQValues
     public String getKey() {
@@ -217,12 +223,14 @@ public class QState {
         int x = w.getPlayerX();
         int y = w.getPlayerY();
         int d = w.getDirection();
+        boolean isSafeExplored = w.isSafeExplored();
         boolean isInPit = w.isInPit();
         boolean isOnGold = w.hasGlitter(x, y);
         boolean isOnWumpus = w.hasWumpus(x, y);
         boolean hasArrow = w.hasArrow();
         
         // Set special bitmask flags of QState
+        state.specialData = (byte)(state.specialData | (isSafeExplored ? QState.TAKE_RISKS : 0));
         state.specialData = (byte)(state.specialData | (isInPit ? QState.IN_PIT : 0));
         state.specialData = (byte)(state.specialData | (isOnGold ? QState.ON_GOLD : 0));
         state.specialData = (byte)(state.specialData | (isOnWumpus ? QState.ON_WUMPUS : 0));
@@ -248,6 +256,47 @@ public class QState {
             state.actionQValues[i] = DEFAULT_VAL;
         }
         
+        return state;
+    }
+    
+    /**
+     * Returns reduced state from World state
+     * Reduced state: merged states from multiple common raw-parsed world states
+     *                (i.e. same action decision can be applied to these multiple common states)
+     * @param w
+     * @return 
+     */
+    public static QState reducedStateFromWorld(World w) {
+        QState state = parseFromWorldState(w);
+        int playerX = w.getPlayerX();
+        int playerY = w.getPlayerY();
+        int playerD = w.getDirection();
+        
+        // If player falls into pit then it gets into a state where area info
+        // doesnt matter, it has to climb out first
+        if ((state.specialData & QState.IN_PIT) > 0) {
+            state.specialData = QState.IN_PIT;
+            state.direction = 0;
+            state.zeroTileData();
+        }
+        
+        // We stepped on gold and next logical decision is to pick it up
+        // and end the game, so we no longer need rest of the state info
+        // This will also cancel IN_PIT state
+        if ((state.specialData & QState.ON_GOLD) > 0) {
+            state.specialData = QState.ON_GOLD;
+            state.direction = 0;
+            state.zeroTileData();
+        }        
+        
+        // Same technique for Wumpus as for pits
+        // This will also cancel out merged ON_GOLD and/or IN_PIT state
+        if ((state.specialData & QState.ON_WUMPUS) > 0) {
+            state.specialData = QState.ON_WUMPUS;
+            state.direction = 0;
+            state.zeroTileData();
+        }
+           
         return state;
     }
     

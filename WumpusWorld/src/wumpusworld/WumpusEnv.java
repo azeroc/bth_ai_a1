@@ -16,21 +16,17 @@ public class WumpusEnv {
     private static final boolean ENABLE_FULL_EXPLORATION = true; // Encourages to fill missing Q-values for actions at least once
     public static final int MAX_EP_LEN = 10000; // Max episode length (Max actions per episode)
     
-    // ACTION REWARD CONSTANTS
-    public static final Double REW_ACT_TL = -2.0;   // Turn Left
-    public static final Double REW_ACT_FW = -1.0;   // Forward
-    public static final Double REW_ACT_TR = -2.0;   // Turn Right
-    public static final Double REW_ACT_GR = -1.0;  // Grab
-    public static final Double REW_ACT_CL = -1.0;  // Climb
-    public static final Double REW_ACT_SH = -10.0; // Shoot
-    
     // CONSEQUENCE REWARDS
     public static final Double REW_WUMPUS = -200.0;   // Step into Wumpus
-    public static final Double REW_PIT = -100.0;      // Step into Pit
-    public static final Double REW_CLIMB_OUT = 20.0;  // Climb out of pit
-    public static final Double REW_GRAB_GOLD = 100.0; // Grab gold
+    public static final Double REW_KILL_WUMPUS = 20.0; // Kill Wumpus
+    public static final Double REW_PIT = -20.0;      // Step into Pit
+    public static final Double REW_TURN = -1.0;       // Turning
+    public static final Double REW_CLIMB_OUT = 10.0;  // Climb out of pit
+    public static final Double REW_GRAB_GOLD = 50.0; // Grab gold
+    public static final Double REW_EXPLORE = 10.0; // Explore unexplored tiles
+    public static final Double REW_BAD_RISK = -20.0; // Take bad risk, ignoring percepts
+    public static final Double REW_MISS_ARROW = -10.0; // Miss the shot against Wumpus
     public static final Double REW_WASTE_TIME = -100.0; // Waste time by doing useless actions
-    public static final Double REW_WASTE_ARROW = -100.0; // Waste arrow or use 'Shoot' when don't have arrow
     
     // Private members
     private final Random rand;
@@ -40,30 +36,6 @@ public class WumpusEnv {
     }    
     
     // === Private methods ===
-    
-    /**
-     * Resolve QState action index to Reward
-     * @param action QState action index
-     * @return Reward of taking the action
-     */
-    private Double resolveActionReward(int action) {
-        switch (action) {
-            case 0:
-                return REW_ACT_TL;
-            case 1:
-                return REW_ACT_FW;
-            case 2:
-                return REW_ACT_TR;
-            case 3:
-                return REW_ACT_GR;
-            case 4:
-                return REW_ACT_CL;
-            case 5:
-                return REW_ACT_SH;
-            default: // This should not happen
-                return 0.0;
-        }
-    }
     
     /**
      * Take action in World and observe reward from taking it
@@ -80,6 +52,8 @@ public class WumpusEnv {
         boolean oldPitFlag = w.isInPit();
         boolean oldArrowFlag = w.hasArrow();
         boolean oldInStench = w.hasStench(oldX, oldY);
+        boolean isSafeExplored = w.isSafeExplored();
+        World ow = w.cloneWorld();
         
         // Do action
         w.doAction(worldAction);
@@ -133,11 +107,15 @@ public class WumpusEnv {
         // Player wastes his arrow shot
         if (worldAction.equals(World.A_SHOOT)) {
             if (oldInStench && newInStench) { // Didn't kill Wumpus (in stench, but faced wrong way)
-                return REW_WASTE_ARROW;
+                return REW_MISS_ARROW;
+            }
+            
+            if (oldInStench && !newInStench) { // Reward for killing wumpus
+                return REW_KILL_WUMPUS;
             }
             
             if (!oldInStench) { // Didn't kill Wumpus (not in a stench tile)
-                return REW_WASTE_ARROW;
+                return REW_WASTE_TIME;
             }
         }
         
@@ -145,6 +123,16 @@ public class WumpusEnv {
         // (i.e. doesn't move anywhere)
         if (worldAction.equals(World.A_MOVE) && oldX == newX && oldY == newY) {
             return REW_WASTE_TIME;
+        }
+        
+        // Player took bad risk when he shouldn't risk yet
+        if (!isSafeExplored && !ow.isSafeTile(newX, newY)) {
+            return REW_BAD_RISK;
+        }
+        
+        // Player explores unexplored
+        if (ow.isUnknown(newX, newY)) {
+            return REW_EXPLORE;
         }
         
         return 0.0;

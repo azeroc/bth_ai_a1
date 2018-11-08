@@ -598,4 +598,73 @@ public class World
         
         return true;    
     }
+    
+    public boolean isSafeTile(int x, int y) {
+        boolean maybeWumpus = true;
+        boolean maybePit = true;
+        
+        // If pit or wumpus, then return false
+        if (this.hasPit(x, y) || this.hasWumpus(x, y)) {
+            return false;
+        }
+        
+        // If no pit or wumpus on explored x, y, then return true
+        if (!this.isUnknown(x, y) && !this.hasPit(x, y) && !this.hasWumpus(x, y)) {
+            return true;
+        }
+        
+        // Left check
+        if (!this.isUnknown(x-1, y) && this.isValidPosition(x-1, y)) {
+            if (!this.hasStench(x-1, y)) {
+                maybeWumpus = false;
+            }
+            if (!this.hasBreeze(x-1, y)) {
+                maybePit = false;
+            }
+        }
+        
+        // Bottom check
+        if (!this.isUnknown(x, y-1) && this.isValidPosition(x, y-1)) {
+            if (!this.hasStench(x, y-1)) {
+                maybeWumpus = false;
+            }
+            if (!this.hasBreeze(x, y-1)) {
+                maybePit = false;
+            }
+        }
+
+        // Right check
+        if (!this.isUnknown(x+1, y) && this.isValidPosition(x+1, y)) {
+            if (!this.hasStench(x+1, y)) {
+                maybeWumpus = false;
+            }
+            if (!this.hasBreeze(x+1, y)) {
+                maybePit = false;
+            }
+        }
+
+        // Top check
+        if (!this.isUnknown(x, y-1) && this.isValidPosition(x, y-1)) {
+            if (!this.hasStench(x, y-1)) {
+                maybeWumpus = false;
+            }
+            if (!this.hasBreeze(x, y-1)) {
+                maybePit = false;
+            }
+        }        
+        
+        return !maybeWumpus && !maybePit;
+    }
+    
+    public boolean isSafeExplored() {
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 4; x++) {
+                if (this.isSafeTile(x, y) && this.isUnknown(x, y)) {
+                    return false;
+                }
+            }
+        }
+        
+        return true;
+    }
 }

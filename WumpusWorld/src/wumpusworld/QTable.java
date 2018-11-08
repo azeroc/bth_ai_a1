@@ -51,7 +51,7 @@ public class QTable {
      * @return World current state's QState
      */
     public QState getQStateFromWorld(World w) {
-        QState parsedState = QState.parseFromWorldState(w);
+        QState parsedState = QState.reducedStateFromWorld(w);
         
         // Try to get current Q-Values from singleton QTable
         String key = parsedState.getKey();
