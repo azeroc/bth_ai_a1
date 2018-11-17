@@ -487,7 +487,21 @@ public class GUI implements ActionListener
         trainPremadeBtn.setActionCommand("TRAIN_PREMADE");
         trainPremadeBtn.addActionListener(this);
         gbc.gridy = 8; trainingPanel.add(trainPremadeBtn, gbc);
-        
+      
+         // Button - Save: Premade maps
+        JButton trainSaveBtn = new JButton("Save trained data");
+        trainSaveBtn.setActionCommand("TRAIN_SAVE");
+        trainSaveBtn.addActionListener(this);
+        gbc.gridy = 9; trainingPanel.add(trainSaveBtn, gbc);
+      
+       
+          // Button - Save: Premade maps
+        JButton trainLoadBtn = new JButton("Load");
+        trainLoadBtn.setActionCommand("TRAIN_LOAD");
+        trainLoadBtn.addActionListener(this);
+        gbc.gridy = 10; trainingPanel.add(trainLoadBtn, gbc);
+      
+       
         return trainingPanel;
     }
     
@@ -687,6 +701,27 @@ public class GUI implements ActionListener
                       
             refreshStats();
         }
+        
+         if (e.getActionCommand().equals("TRAIN_SAVE") )
+        {
+            QTable qt = QTable.getInstance();
+            qt.saveToFile();
+             System.out.printf("> save done. ");
+            //saving tables
+        }
+         
+            if (e.getActionCommand().equals("TRAIN_LOAD") )
+        {
+            QTable qt = QTable.getInstance();
+            qt.loadFromFile();
+             System.out.printf("> load done. ");
+             refreshStats();
+            //saving tables
+        }
+         
+         
+         
+        
     }
     
     /**

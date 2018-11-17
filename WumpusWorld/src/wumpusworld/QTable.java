@@ -6,6 +6,8 @@
 package wumpusworld;
 
 import java.util.HashMap;
+import java.io.*;
+import java.util.Collections;
 
 /**
  *
@@ -73,5 +75,50 @@ public class QTable {
      */
     public int getQStateCount() {
         return _table.size();
+    }
+    
+    public void saveToFile()
+    {
+        try 
+        {
+            FileOutputStream fileOut =
+         new FileOutputStream("wumpus.ser");
+         ObjectOutputStream out = new ObjectOutputStream(fileOut);
+         out.writeObject(_table);
+          System.out.printf("> saved... %d objects", _table.size() );
+         out.close();
+         fileOut.close();
+          }
+        catch (IOException i) {
+         i.printStackTrace();
+           }
+    }
+    
+     
+    public void loadFromFile()
+    {
+        try 
+        {
+            FileInputStream fileOut =
+         new FileInputStream("wumpus.ser");
+         ObjectInputStream in = new ObjectInputStream(fileOut);
+         HashMap<String, QState> tab;
+         tab = (HashMap) in.readObject();
+           System.out.printf("> loaded... %d objects", tab.size() );
+           
+           _table.clear();
+           _table.putAll(tab);
+         
+         in.close();
+         fileOut.close();
+          }
+        catch (IOException i) {
+         i.printStackTrace();
+           }
+        catch (ClassNotFoundException c) {
+         System.out.println("HashMap class not found");
+         c.printStackTrace();
+         return;
+      }
     }
 }

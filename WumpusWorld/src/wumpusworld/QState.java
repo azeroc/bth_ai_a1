@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
  *
  * @author Azeroc
  */
-public class QState {
+public class QState  implements java.io.Serializable  {
     public static final int TILE_ARR_SIZE = 9;
     public static final int Q_ARR_SIZE = 5;
     public static final int KEY_SIZE = 1 + 1 + TILE_ARR_SIZE;
