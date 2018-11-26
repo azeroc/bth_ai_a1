@@ -599,67 +599,130 @@ public class World
         return true;    
     }
     
-    public boolean isSafeTile(int x, int y) {
-        boolean maybeWumpus = true;
-        boolean maybePit = true;
+    public boolean isMaybePitTile(int x, int y) {
+        if (this.isVisited(x, y)) {
+            return this.hasPit(x, y);
+        }
         
-        // If pit or wumpus, then return false
-        if (this.hasPit(x, y) || this.hasWumpus(x, y)) {
+        // Up, right, bottom, left check
+        if (this.isVisited(x, y+1) && !this.hasBreeze(x, y+1)) return false;
+        if (this.isVisited(x+1, y) && !this.hasBreeze(x+1, y)) return false;
+        if (this.isVisited(x, y-1) && !this.hasBreeze(x, y-1)) return false;
+        if (this.isVisited(x-1, y) && !this.hasBreeze(x-1, y)) return false;
+        
+        return true;
+    }
+    
+    public boolean isMaybeWumpusTile(int x, int y) {
+        if (this.isVisited(x, y)) {
+            return this.hasWumpus(x, y);
+        }
+        
+        // Up, right, bottom, left check
+        if (this.isVisited(x, y+1) && !this.hasStench(x, y+1)) return false;
+        if (this.isVisited(x+1, y) && !this.hasStench(x+1, y)) return false;
+        if (this.isVisited(x, y-1) && !this.hasStench(x, y-1)) return false;
+        if (this.isVisited(x-1, y) && !this.hasStench(x-1, y)) return false;
+        
+        return true;
+    }
+    
+    public boolean confirmedWumpusTile(int x, int y) {
+        int stenchCounter = 0;
+        
+        if (this.isVisited(x, y)) {
+            return this.hasWumpus(x, y);
+        }
+        
+        // Left stench check
+        if (this.isVisited(x-1, y)) {
+            if (this.hasStench(x-1, y)) {
+                stenchCounter++;
+            } else {
+                return false;
+            }
+        }
+        
+        // Top stench check
+        if (this.isVisited(x, y+1)) {
+            if (this.hasStench(x, y+1)) {
+                stenchCounter++;
+            } else {
+                return false;
+            }
+        }
+        
+        // Right stench check
+        if (this.isVisited(x+1, y)) {
+            if (this.hasStench(x+1, y)) {
+                stenchCounter++;
+            } else {
+                return false;
+            }
+        }
+        
+        // Bottom stench check
+        if (this.isVisited(x, y-1)) {
+            if (this.hasStench(x, y-1)) {
+                stenchCounter++;
+            } else {
+                return false;
+            }
+        }
+        
+        // Two stenches needed to confirm
+        return stenchCounter >= 2;
+    }
+    
+    public boolean isWumpusConfirmed() {
+        for (int y = 1; y <= 4; y++) {
+            for (int x = 1; x <= 4; x++) {
+                if (this.confirmedWumpusTile(x, y)) {
+                    return true;
+                }
+            }
+        }
+        
+        return false;
+    }
+    
+    public boolean isMaybeSafeTile(int x, int y, boolean wumpusConfirmed) {
+        if (this.isVisited(x, y)) {
+            return (!this.hasPit(x, y) && !this.hasWumpus(x, y));
+        }
+        
+        // Wumpus checks
+        if (wumpusConfirmed) { // When wumpus location is confirmed
+            if (this.confirmedWumpusTile(x, y)) {
+                return false;
+            }
+        } else if (this.isMaybeWumpusTile(x, y)) { // Otherwise check if there may be wumpus there
             return false;
         }
         
-        // If no pit or wumpus on explored x, y, then return true
-        if (!this.isUnknown(x, y) && !this.hasPit(x, y) && !this.hasWumpus(x, y)) {
-            return true;
-        }
+        // Can be safely reached (no adjacent pits)
+        boolean canBeReached = false;
+        if (this.isVisited(x, y+1) && !this.hasBreeze(x, y+1)) canBeReached = true;
+        if (this.isVisited(x+1, y) && !this.hasBreeze(x+1, y)) canBeReached = true;
+        if (this.isVisited(x, y-1) && !this.hasBreeze(x, y-1)) canBeReached = true;
+        if (this.isVisited(x-1, y) && !this.hasBreeze(x-1, y)) canBeReached = true;
         
-        // Left check
-        if (!this.isUnknown(x-1, y) && this.isValidPosition(x-1, y)) {
-            if (!this.hasStench(x-1, y)) {
-                maybeWumpus = false;
-            }
-            if (!this.hasBreeze(x-1, y)) {
-                maybePit = false;
-            }
-        }
+        // Up, right, bottom, left pit checks
+        boolean noPit = false;
+        if (this.isVisited(x, y+1) && !this.hasBreeze(x, y+1)) noPit = true;
+        if (this.isVisited(x+1, y) && !this.hasBreeze(x+1, y)) noPit = true;
+        if (this.isVisited(x, y-1) && !this.hasBreeze(x, y-1)) noPit = true;
+        if (this.isVisited(x-1, y) && !this.hasBreeze(x-1, y)) noPit = true;
         
-        // Bottom check
-        if (!this.isUnknown(x, y-1) && this.isValidPosition(x, y-1)) {
-            if (!this.hasStench(x, y-1)) {
-                maybeWumpus = false;
-            }
-            if (!this.hasBreeze(x, y-1)) {
-                maybePit = false;
-            }
-        }
-
-        // Right check
-        if (!this.isUnknown(x+1, y) && this.isValidPosition(x+1, y)) {
-            if (!this.hasStench(x+1, y)) {
-                maybeWumpus = false;
-            }
-            if (!this.hasBreeze(x+1, y)) {
-                maybePit = false;
-            }
-        }
-
-        // Top check
-        if (!this.isUnknown(x, y-1) && this.isValidPosition(x, y-1)) {
-            if (!this.hasStench(x, y-1)) {
-                maybeWumpus = false;
-            }
-            if (!this.hasBreeze(x, y-1)) {
-                maybePit = false;
-            }
-        }        
-        
-        return !maybeWumpus && !maybePit;
+        return canBeReached && noPit;
     }
     
     public boolean isSafeExplored() {
+        boolean wumpusConfirmed = this.isWumpusConfirmed();
         for (int y = 1; y <= 4; y++) {
             for (int x = 1; x <= 4; x++) {
-                if (this.isSafeTile(x, y) && this.isUnknown(x, y)) {
+                // Check if there exists unknown tile with no potential pit in it
+                if (this.isMaybeSafeTile(x, y, wumpusConfirmed) && this.isUnknown(x, y)) {
                     return false;
                 }
             }

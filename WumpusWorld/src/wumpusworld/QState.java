@@ -5,50 +5,53 @@
  */
 package wumpusworld;
 
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.Random;
 
 /**
  *
  * @author Azeroc
  */
 public class QState  implements java.io.Serializable  {
-    public static final int TILE_ARR_SIZE = 9;
-    public static final int Q_ARR_SIZE = 5;
-    public static final int KEY_SIZE = 1 + 1 + TILE_ARR_SIZE;
+    public static final int TILE_ARR_SIZE = 16;
+    public static final int Q_ARR_SIZE = 7;
+    public static final int KEY_SIZE = 1 + 1 + 1 + TILE_ARR_SIZE;
     public static final int BYTE_SIZE = KEY_SIZE + (Q_ARR_SIZE * 8);
     
     // Default Q-value indicating that it is uninitialized
-    public static final Double DEFAULT_VAL = Double.NEGATIVE_INFINITY;
+    public static final Double DEFAULT_VAL = 0.0;
+    public static final Double ILLEGAL_VAL = -10000.0;
     
     // Special state bitmask flags
-    public static final byte NORMAL     = 0;  // 0000 0000
-    public static final byte TAKE_RISKS = 1;  // 0000 0001
-    public static final byte IN_PIT     = 2;  // 0000 0010
-    public static final byte ON_GOLD    = 4;  // 0000 0100
-    public static final byte ON_WUMPUS  = 8;  // 0000 1000  
-    public static final byte HAS_ARROW   = 16; // 0001 0000
+    public static final byte NORMAL          = 0;  // 0000
+    public static final byte TAKE_RISKS      = 1;  // 0001
+    public static final byte ON_GOLD_STATE   = 2;  // 0010
+    public static final byte ON_WUMPUS_STATE = 4;  // 0100
+    public static final byte IN_PIT          = 8;  // 1000
+    public static final byte HAS_ARROW       = 16; // 0001 1000
     
     // Tile state bitmask flags
-    public static final byte TILE_UNEXPLORED = 0;  // 0000 0000
-    public static final byte TILE_EXPLORED   = 1;  // 0000 0001
-    public static final byte TILE_BREEZE     = 2;  // 0000 0010
-    public static final byte TILE_STENCH     = 4;  // 0000 0100
-    public static final byte TILE_PIT        = 8;  // 0000 1000  
-    public static final byte TILE_WALL       = 16; // 0001 0000
-    public static final byte TILE_GLITTER    = 32; // 0010 0000
+    public static final byte TILE_UNEXPLORED = 0; // 0000
+    public static final byte TILE_EXPLORED   = 1; // 0001
+    public static final byte TILE_BREEZE     = 2; // 0010
+    public static final byte TILE_STENCH     = 4; // 0100
+    public static final byte TILE_GLITTER    = 8; // 1000
+    
+    // QState action index constants
+    public static final int A_MOVE_UP = 0;
+    public static final int A_MOVE_RIGHT = 1;
+    public static final int A_MOVE_DOWN = 2;
+    public static final int A_MOVE_LEFT = 3;
+    public static final int A_SHOOT = 4;
+    public static final int A_GRAB = 5;
+    public static final int A_CLIMB = 6;
     
     // QState's parsed data    
     public byte specialData;
-    public byte direction; // Player Direction (see: Player Directions constants)
+    public byte playerX;
+    public byte playerY;
     public byte tileData[]; // 3x3 tile data around player
     public Double actionQValues[]; // 5 Doubles for the Q values of 5 actions
-    
-    private void zeroTileData() {
-        for (int i = 0; i < TILE_ARR_SIZE; i++) {
-            this.tileData[i] = 0;
-        }
-    }
     
     // QEntry's key for QTable
     // Combination of parsed data into string with exception of actionQValues
@@ -58,8 +61,10 @@ public class QState  implements java.io.Serializable  {
         
         // Special flags
         keyBuf[keyItr++] = this.specialData; 
-        // Direction
-        keyBuf[keyItr++] = this.direction; 
+        // PlayerX
+        keyBuf[keyItr++] = this.playerX;
+        // PlayerY
+        keyBuf[keyItr++] = this.playerY;
         // TileData
         for (int i = 0; i < TILE_ARR_SIZE; i++) {
             keyBuf[keyItr++] = this.tileData[i];
@@ -69,98 +74,15 @@ public class QState  implements java.io.Serializable  {
     }
     
     /**
-     * Decode byte array as QState object
-     * @param bytes QState in binary form
-     * @return decoded QState object
-     */
-    public static QState decode(byte[] bytes) {
-        // Control check
-        if (bytes.length < BYTE_SIZE) {
-            return null;
-        }        
-        
-        byte[] doubleBuf = new byte[8];
-        QState res = new QState();
-        res.tileData = new byte[TILE_ARR_SIZE];
-        res.actionQValues = new Double[Q_ARR_SIZE];
-        int byteItr = 0;      
-        
-        // Special bitmask flags byte
-        res.specialData = bytes[byteItr++];
-        
-        // Player direction byte
-        res.direction = bytes[byteItr++];
-        
-        // Tile data
-        for (int i = 0; i < TILE_ARR_SIZE; i++) {
-            res.tileData[i] = bytes[byteItr++];
-        }
-        
-        // Action Q Values
-        for (int j = 0; j < Q_ARR_SIZE; j++) {          
-            doubleBuf[0] = bytes[byteItr++];
-            doubleBuf[1] = bytes[byteItr++];
-            doubleBuf[2] = bytes[byteItr++];
-            doubleBuf[3] = bytes[byteItr++];
-            doubleBuf[4] = bytes[byteItr++];
-            doubleBuf[5] = bytes[byteItr++];
-            doubleBuf[6] = bytes[byteItr++];
-            doubleBuf[7] = bytes[byteItr++];            
-            res.actionQValues[j] = ByteBuffer.wrap(doubleBuf).getDouble();
-        }
-        
-        return res;
-    }
-    
-    /**
-     * Encode QState into binary array
-     * @param state QState object
-     * @return binary array describing QState object
-     */
-    public static byte[] encode(QState state) {
-        // [1: PlayerD][1: HasArrow, PlayerY, PlayerX][16: TileData][6*8: 6 action Q Values]
-        // Total bytes per QState entry: 1 + 1 + 16 + 6*8 = 66 bytes
-        byte[] res = new byte[BYTE_SIZE];
-        byte[] doubleBuf = new byte[8];
-        int resItr = 0;
-        
-        // Special bitmask flags byte
-        res[resItr++] = state.specialData;
-        
-        // Player direction byte
-        res[resItr++] = state.direction;
-        
-        // TileData
-        for (int i = 0; i < TILE_ARR_SIZE; i++) {
-            res[resItr++] = state.tileData[i];
-        }
-        
-        // Action Q Values
-        for (int j = 0; j < Q_ARR_SIZE; j++) {
-            ByteBuffer.wrap(doubleBuf).putDouble(state.actionQValues[j]);
-            res[resItr++] = doubleBuf[0];
-            res[resItr++] = doubleBuf[1];
-            res[resItr++] = doubleBuf[2];
-            res[resItr++] = doubleBuf[3];
-            res[resItr++] = doubleBuf[4];
-            res[resItr++] = doubleBuf[5];
-            res[resItr++] = doubleBuf[6];
-            res[resItr++] = doubleBuf[7];
-        }
-        return res;
-    }
-    
-    /**
      * Get highest QValue possible from this state's actions
      * If no action Q-values have been initialized, then return 0.0
      * @return highest QValue
      */
     public Double argmaxValue() {
-        Double max = 0.0;
+        Double max = this.actionQValues[0];
         
         for (int i = 0; i < Q_ARR_SIZE; i++) {
             Double val = this.actionQValues[i];
-            val = (val.equals(DEFAULT_VAL)) ? 0.0 : val;
             max = (val > max) ? val : max;
         }
         
@@ -174,18 +96,35 @@ public class QState  implements java.io.Serializable  {
     public int argmaxAction() {
         int bestAction = 0;
         Double max = this.actionQValues[0];
-        max = (max.equals(DEFAULT_VAL)) ? 0.0 : max;
         
         for (int i = 0; i < Q_ARR_SIZE; i++) {
-            Double val = this.actionQValues[i];
-            val = (val.equals(DEFAULT_VAL)) ? 0.0 : val;            
+            Double val = this.actionQValues[i];        
             if (val > max) {
                 bestAction = i;
                 max = val;
             }
         }
         
-        return bestAction;
+        return (bestAction > ILLEGAL_VAL) ? bestAction : -1;
+    }
+    
+    public int argRandomAction(Random rand) {
+        int validActionCount = 0;
+        int[] validActions = new int[Q_ARR_SIZE];
+        
+        for (int i = 0; i < Q_ARR_SIZE; i++) {
+            Double qval = this.actionQValues[i];
+            if (qval > ILLEGAL_VAL) {
+                validActions[validActionCount] = i;
+                validActionCount++;
+            }            
+        }
+        
+        if (validActionCount > 0) {
+            return validActions[rand.nextInt(validActionCount)];
+        } else {
+            return -1;
+        }
     }
     
     /**
@@ -196,7 +135,6 @@ public class QState  implements java.io.Serializable  {
         Double[] values = new Double[Q_ARR_SIZE];
         for (int i = 0; i < Q_ARR_SIZE; i++) {
             Double val = this.actionQValues[i];
-            val = (val.equals(DEFAULT_VAL)) ? 0.0 : val;
             values[i] = val;
         }
         return values;
@@ -208,8 +146,7 @@ public class QState  implements java.io.Serializable  {
         data = (byte)(data | (w.isVisited(x, y) ? TILE_EXPLORED : 0));
         data = (byte)(data | (w.hasBreeze(x, y) ? TILE_BREEZE : 0));
         data = (byte)(data | (w.hasStench(x, y) ? TILE_STENCH : 0));
-        data = (byte)(data | (w.hasPit(x, y) ? TILE_PIT : 0));
-        data = (byte)(data | (!w.isValidPosition(x, y) ? TILE_WALL : 0));
+        data = (byte)(data | (w.hasGlitter(x, y) ? TILE_GLITTER : 0));
         return data;
     }
     
@@ -219,106 +156,198 @@ public class QState  implements java.io.Serializable  {
         state.tileData = new byte[TILE_ARR_SIZE];
         state.actionQValues = new Double[Q_ARR_SIZE];
         
-        // Get current world & player info
-        int x = w.getPlayerX();
-        int y = w.getPlayerY();
-        int d = w.getDirection();
+        // World & player info
+        state.playerX = (byte)(w.getPlayerX());
+        state.playerY = (byte)(w.getPlayerY());
         boolean isSafeExplored = w.isSafeExplored();
-        boolean isInPit = w.isInPit();
-        boolean isOnGold = w.hasGlitter(x, y);
-        boolean isOnWumpus = w.hasWumpus(x, y);
+        boolean isOnGold = w.hasGlitter(state.playerX, state.playerY);
+        boolean isOnWumpus = w.hasWumpus(state.playerX, state.playerY);
         boolean hasArrow = w.hasArrow();
+        boolean inPit = w.isInPit();
+        
+        if (isOnGold || isOnWumpus) {
+            state.playerX = 0;
+            state.playerY = 0;
+        }
         
         // Set special bitmask flags of QState
         state.specialData = (byte)(state.specialData | (isSafeExplored ? QState.TAKE_RISKS : 0));
-        state.specialData = (byte)(state.specialData | (isInPit ? QState.IN_PIT : 0));
-        state.specialData = (byte)(state.specialData | (isOnGold ? QState.ON_GOLD : 0));
-        state.specialData = (byte)(state.specialData | (isOnWumpus ? QState.ON_WUMPUS : 0));
+        state.specialData = (byte)(state.specialData | (isOnGold ? QState.ON_GOLD_STATE : 0));
+        state.specialData = (byte)(state.specialData | (isOnWumpus ? QState.ON_WUMPUS_STATE : 0));
+        state.specialData = (byte)(state.specialData | (inPit ? QState.IN_PIT : 0));
         state.specialData = (byte)(state.specialData | (hasArrow ? QState.HAS_ARROW : 0));
         
-        // Set player direction
-        state.direction = (byte)d;
-        
-        // Set tile data around player
-        // [0] - top-left, [8] - bottom-right
-        state.tileData[0] = parseTileData(w, x-1, y+1);
-        state.tileData[1] = parseTileData(w, x,   y+1);
-        state.tileData[2] = parseTileData(w, x+1, y+1);
-        state.tileData[3] = parseTileData(w, x-1, y);
-        state.tileData[4] = parseTileData(w, x,   y);
-        state.tileData[5] = parseTileData(w, x+1, y);
-        state.tileData[6] = parseTileData(w, x-1, y-1);
-        state.tileData[7] = parseTileData(w, x,   y-1);
-        state.tileData[8] = parseTileData(w, x+1, y-1); 
+        // Parse tile data
+        for (int x = 0; x < 4; x++) {
+            for (int y = 0; y < 4; y++) {
+                int index = x + (y*4);
+                
+                if (isOnGold || isOnWumpus) {
+                    state.tileData[index] = 0;
+                } else {
+                    state.tileData[index] = parseTileData(w, x+1, y+1);
+                }                
+            }
+        }
         
         // Default vals for Q Action-Values
         for (int i = 0; i < Q_ARR_SIZE; i++) {
-            state.actionQValues[i] = DEFAULT_VAL;
+            if (isQActionLegal(w, i)) {
+                state.actionQValues[i] = QState.DEFAULT_VAL;
+            } else {
+                state.actionQValues[i] = QState.ILLEGAL_VAL;
+            }            
         }
         
         return state;
     }
     
-    /**
-     * Returns reduced state from World state
-     * Reduced state: merged states from multiple common raw-parsed world states
-     *                (i.e. same action decision can be applied to these multiple common states)
-     * @param w
-     * @return 
-     */
-    public static QState reducedStateFromWorld(World w) {
-        QState state = parseFromWorldState(w);
-        int playerX = w.getPlayerX();
-        int playerY = w.getPlayerY();
-        int playerD = w.getDirection();
+    public static boolean isQActionLegal(World w, int action) {
+        int x = w.getPlayerX();
+        int y = w.getPlayerY();
+        boolean stench = w.hasStench(x, y);
+        boolean wumpusConfirmed = w.isWumpusConfirmed();
+        boolean safeExplored = w.isSafeExplored();
         
-        // If player falls into pit then it gets into a state where area info
-        // doesnt matter, it has to climb out first
-        if ((state.specialData & QState.IN_PIT) > 0) {
-            state.specialData = QState.IN_PIT;
-            state.direction = 0;
-            state.zeroTileData();
+        // Climbing
+        if (w.isInPit() && action != A_CLIMB) return false;
+        if (w.isInPit() && action == A_CLIMB) return true;
+        if (!w.isInPit() && action == A_CLIMB) return false;
+        
+        // Moving up
+        if (action == A_MOVE_UP) {
+            if (!w.isValidPosition(x, y+1)) {
+                return false;
+            }
+            if (w.isMaybePitTile(x, y+1) && !safeExplored) {
+                return false;
+            }
+            if (w.confirmedWumpusTile(x, y+1)) {
+                return false;
+            }
+            if (stench && !wumpusConfirmed && w.isUnknown(x, y+1)) {
+                return false;
+            }
         }
         
-        // We stepped on gold and next logical decision is to pick it up
-        // and end the game, so we no longer need rest of the state info
-        // This will also cancel IN_PIT state
-        if ((state.specialData & QState.ON_GOLD) > 0) {
-            state.specialData = QState.ON_GOLD;
-            state.direction = 0;
-            state.zeroTileData();
-        }        
-        
-        // Same technique for Wumpus as for pits
-        // This will also cancel out merged ON_GOLD and/or IN_PIT state
-        if ((state.specialData & QState.ON_WUMPUS) > 0) {
-            state.specialData = QState.ON_WUMPUS;
-            state.direction = 0;
-            state.zeroTileData();
+        // Moving right
+        if (action == A_MOVE_RIGHT) {
+            if (!w.isValidPosition(x+1, y)) {
+                return false;
+            }
+            if (w.isMaybePitTile(x+1, y) && !safeExplored) {
+                return false;
+            }
+            if (w.confirmedWumpusTile(x+1, y)) {
+                return false;
+            }
+            if (stench && !wumpusConfirmed && w.isUnknown(x+1, y)) {
+                return false;
+            }
         }
-           
-        return state;
+        
+        // Moving down
+        if (action == A_MOVE_DOWN) {
+            if (!w.isValidPosition(x, y-1)) {
+                return false;
+            }
+            if (w.isMaybePitTile(x, y-1) && !safeExplored) {
+                return false;
+            }
+            if (w.confirmedWumpusTile(x, y-1)) {
+                return false;
+            }
+            if (stench && !wumpusConfirmed && w.isUnknown(x, y-1)) {
+                return false;
+            }
+        }
+        
+        // Moving left
+        if (action == A_MOVE_LEFT) {
+            if (!w.isValidPosition(x-1, y)) {
+                return false;
+            }
+            if (w.isMaybePitTile(x-1, y) && !safeExplored) {
+                return false;
+            }
+            if (w.confirmedWumpusTile(x-1, y)) {
+                return false;
+            }
+            if (stench && !wumpusConfirmed && w.isUnknown(x-1, y)) {
+                return false;
+            }
+        }
+        
+        // Shooting arrow
+        if (action == A_SHOOT) {
+            if (!w.hasArrow()) return false;
+            
+            // Special case (when starting in a stench)
+            if (w.isUnknown(1, 2) && w.isUnknown(2, 1) && w.hasStench(1, 1)) {
+                return true;
+            }            
+            
+            if (w.confirmedWumpusTile(x, y+1)) return true;
+            if (w.confirmedWumpusTile(x+1, y)) return true;
+            if (w.confirmedWumpusTile(x, y-1)) return true;
+            if (w.confirmedWumpusTile(x-1, y)) return true;
+            return false;
+        }
+        
+        // Grabbing gold
+        if (action == A_GRAB) {
+            if (!w.hasGlitter(x, y)) {
+                return false;
+            }
+        }
+        
+        return true;
     }
     
-    /**
-     * Resolve QState action index to World action
-     * @param action action index
-     * @return World action
-     */
-    public static String resolveToWorldAction(int action) {
-        switch (action) {
-            case 0:
-                return World.A_MOVE;
-            case 1:
-                return World.A_TURN_LEFT;
-            case 2:
-                return World.A_GRAB;
-            case 3:
-                return World.A_CLIMB;
-            case 4:
-                return World.A_SHOOT;
-            default:
-                return World.A_MOVE;
+    public static void doQStateAction(World w, int qstateAction) {
+        switch (qstateAction) {
+            case A_MOVE_UP:
+                if (w.getDirection() == World.DIR_DOWN) w.doAction(World.A_TURN_LEFT);
+                if (w.getDirection() == World.DIR_RIGHT) w.doAction(World.A_TURN_LEFT);
+                if (w.getDirection() == World.DIR_LEFT) w.doAction(World.A_TURN_RIGHT);
+                w.doAction(World.A_MOVE);
+                break;
+            case A_MOVE_RIGHT:
+                if (w.getDirection() == World.DIR_LEFT) w.doAction(World.A_TURN_RIGHT);
+                if (w.getDirection() == World.DIR_UP) w.doAction(World.A_TURN_RIGHT);
+                if (w.getDirection() == World.DIR_DOWN) w.doAction(World.A_TURN_LEFT);
+                w.doAction(World.A_MOVE);
+                break;
+            case A_MOVE_DOWN:
+                if (w.getDirection() == World.DIR_UP) w.doAction(World.A_TURN_LEFT);
+                if (w.getDirection() == World.DIR_LEFT) w.doAction(World.A_TURN_LEFT);
+                if (w.getDirection() == World.DIR_RIGHT) w.doAction(World.A_TURN_RIGHT);
+                w.doAction(World.A_MOVE);
+                break;
+            case A_MOVE_LEFT:
+                if (w.getDirection() == World.DIR_RIGHT) w.doAction(World.A_TURN_LEFT);
+                if (w.getDirection() == World.DIR_UP) w.doAction(World.A_TURN_LEFT);
+                if (w.getDirection() == World.DIR_DOWN) w.doAction(World.A_TURN_RIGHT);
+                w.doAction(World.A_MOVE);                
+                break;
+            case A_SHOOT: // Automatically lock on confirmed Wumpus tile and then shoot the arrow (will be a miss if wumpus not present)
+                int playerX = w.getPlayerX();
+                int playerY = w.getPlayerY();
+                for (int i = 0; i < 3; i++) {
+                    if (w.getDirection() == World.DIR_UP    && w.confirmedWumpusTile(playerX,   playerY+1)) break;
+                    if (w.getDirection() == World.DIR_RIGHT && w.confirmedWumpusTile(playerX+1, playerY  )) break;
+                    if (w.getDirection() == World.DIR_DOWN  && w.confirmedWumpusTile(playerX,   playerY-1)) break;
+                    if (w.getDirection() == World.DIR_LEFT  && w.confirmedWumpusTile(playerX-1, playerY  )) break;
+                    w.doAction(World.A_TURN_RIGHT);
+                }
+                w.doAction(World.A_SHOOT);
+                break;
+            case A_GRAB:
+                w.doAction(World.A_GRAB);
+                break;
+            case A_CLIMB:
+                w.doAction(World.A_CLIMB);
+                break;
         }
-    }    
+    }
 }

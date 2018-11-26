@@ -34,7 +34,6 @@ public class GUI implements ActionListener
     private JTextField trainEpsMinField;
     private JTextField trainEpsDecayField;
     private World w;
-    private WumpusEnv env;
     private Agent agent;
     private JPanel[][] blocks;
     private JComboBox mapList;
@@ -54,7 +53,7 @@ public class GUI implements ActionListener
      * Creates and start the GUI.
      */
     public GUI()
-    {
+    {        
         if (!checkResources())
         {
             JOptionPane.showMessageDialog(null, "Unable to start GUI. Missing icons.", "Error", JOptionPane.ERROR_MESSAGE);
@@ -81,8 +80,7 @@ public class GUI implements ActionListener
         l_player_down = new ImageIcon("gfx/PD.png");
         l_player_left = new ImageIcon("gfx/PL.png");
         l_player_right = new ImageIcon("gfx/PR.png");
-        
-        env = new WumpusEnv();
+        agent = new MyAgent(w);        
         
         createWindow();
     }
@@ -225,7 +223,7 @@ public class GUI implements ActionListener
         mapListLabel = new JLabel("Map list: ", SwingConstants.CENTER);
         mapListLabel.setPreferredSize(new Dimension(150,25));
         gbc.gridx = 0; gbc.gridy = 4;
-        gameControlPanel.add(mapListLabel, gbc);          
+        gameControlPanel.add(mapListLabel, gbc);
         
         // === Buttons ===
         // Button - Turn Left
@@ -297,7 +295,7 @@ public class GUI implements ActionListener
         bn.setActionCommand("NEW");
         bn.addActionListener(this);
         gbc.gridx = 2; gbc.gridy = 4;
-        gameControlPanel.add(bn, gbc);        
+        gameControlPanel.add(bn, gbc);
         
         return gameControlPanel;
     }
@@ -356,18 +354,22 @@ public class GUI implements ActionListener
         gbc2.gridx = 0; gbc2.weightx = 0.0; gbc2.weighty = 0.0;
         JLabel labelState = new JLabel("State: ", SwingConstants.LEFT);
         gbc2.gridy = 0; currentStatePanel.add(labelState, gbc2);
-        JLabel labelQValAction0 = new JLabel("[0] Action - FW: ", SwingConstants.LEFT);
+        JLabel labelQValAction0 = new JLabel("[0] Action - UP: ", SwingConstants.LEFT);
         gbc2.gridy = 1; currentStatePanel.add(labelQValAction0, gbc2);
-        JLabel labelQValAction1 = new JLabel("[1] Action - TL: ", SwingConstants.LEFT);
+        JLabel labelQValAction1 = new JLabel("[1] Action - RIGHT: ", SwingConstants.LEFT);
         gbc2.gridy = 2; currentStatePanel.add(labelQValAction1, gbc2);
-        JLabel labelQValAction2 = new JLabel("[2] Action - GR: ", SwingConstants.LEFT);
+        JLabel labelQValAction2 = new JLabel("[2] Action - DOWN: ", SwingConstants.LEFT);
         gbc2.gridy = 3; currentStatePanel.add(labelQValAction2, gbc2);
-        JLabel labelQValAction3 = new JLabel("[3] Action - CL: ", SwingConstants.LEFT);
+        JLabel labelQValAction3 = new JLabel("[3] Action - LEFT: ", SwingConstants.LEFT);
         gbc2.gridy = 4; currentStatePanel.add(labelQValAction3, gbc2);
-        JLabel labelQValAction4 = new JLabel("[4] Action - SH: ", SwingConstants.LEFT);
-        gbc2.gridy = 5; currentStatePanel.add(labelQValAction4, gbc2);
+        JLabel labelQValAction4 = new JLabel("[4] Action - SHOOT: ", SwingConstants.LEFT);
+        gbc2.gridy = 5; currentStatePanel.add(labelQValAction4, gbc2);      
+        JLabel labelQValAction5 = new JLabel("[5] Action - GRAB: ", SwingConstants.LEFT);
+        gbc2.gridy = 6; currentStatePanel.add(labelQValAction5, gbc2);  
+        JLabel labelQValAction6 = new JLabel("[6] Action - CLIMB: ", SwingConstants.LEFT);
+        gbc2.gridy = 7; currentStatePanel.add(labelQValAction6, gbc2);  
         JLabel labelQValActionBest = new JLabel("Best Action: ", SwingConstants.LEFT);
-        gbc2.gridy = 6; currentStatePanel.add(labelQValActionBest, gbc2);
+        gbc2.gridy = 8; currentStatePanel.add(labelQValActionBest, gbc2);
         
         // State text field
         stateField = new JTextField();
@@ -387,7 +389,7 @@ public class GUI implements ActionListener
         // Best Action text field
         stateBestAction = new JTextField();
         stateBestAction.setEditable(false);
-        gbc2.gridx = 1; gbc2.gridy = 7; gbc2.weightx = 1.0;
+        gbc2.gridx = 1; gbc2.gridy = 8; gbc2.weightx = 1.0;
         currentStatePanel.add(stateBestAction, gbc2);    
 
         // Add sub-panel to main stats panel
@@ -542,11 +544,36 @@ public class GUI implements ActionListener
      */
     public void actionPerformed(ActionEvent e)
     {
+        Double alpha;
+        Double gamma;
+        Double epsStart;
+        Double epsMin;
+        Double epsLDecay;                      
+        int trainEpisodes;  
+        
+        try {
+            String trainEpStr = trainEpisodesField.getText().replaceAll("\\s+", "");
+            String alphaStr = trainAlphaField.getText().replaceAll("\\s+", "");
+            String gammaStr = trainGammaField.getText().replaceAll("\\s+", "");
+            String epsStartStr = trainEpsStartField.getText().replaceAll("\\s+", "");
+            String epsMinStr = trainEpsMinField.getText().replaceAll("\\s+", "");
+            String epsDecayStr = trainEpsDecayField.getText().replaceAll("\\s+", "");
+            trainEpisodes = Integer.parseInt(trainEpStr);
+            alpha = Double.parseDouble(alphaStr);
+            gamma = Double.parseDouble(gammaStr);
+            epsStart = Double.parseDouble(epsStartStr);
+            epsMin = Double.parseDouble(epsMinStr);
+            epsLDecay = Double.parseDouble(epsDecayStr);
+        } catch (NumberFormatException nfe) {
+            JOptionPane.showMessageDialog(frame, "Invalid number format for one or more of the training field values", "Training error", JOptionPane.ERROR_MESSAGE);
+            return;
+        }        
+        
         if (e.getActionCommand().equals("TL"))
         {
-            w.doAction(World.A_TURN_LEFT);            
+            w.doAction(World.A_TURN_LEFT);
             updateGame();
-            refreshStats();
+            refreshStats();   
         }
         if (e.getActionCommand().equals("TR"))
         {
@@ -597,10 +624,6 @@ public class GUI implements ActionListener
         }
         if (e.getActionCommand().equals("AGENT"))
         {
-            if (agent == null)
-            {
-                agent = new MyAgent(w);
-            }
             agent.doAction();
             updateGame();
             refreshStats();
@@ -609,31 +632,6 @@ public class GUI implements ActionListener
             e.getActionCommand().equals("TRAIN_PREMADE"))
         {
             WorldMap map;
-            Double alpha;
-            Double gamma;
-            Double epsStart;
-            Double epsMin;
-            Double epsLDecay;                      
-            int trainEpisodes;
-            
-            // Parse training params
-            try {
-                String trainEpStr = trainEpisodesField.getText().replaceAll("\\s+", "");
-                String alphaStr = trainAlphaField.getText().replaceAll("\\s+", "");
-                String gammaStr = trainGammaField.getText().replaceAll("\\s+", "");
-                String epsStartStr = trainEpsStartField.getText().replaceAll("\\s+", "");
-                String epsMinStr = trainEpsMinField.getText().replaceAll("\\s+", "");
-                String epsDecayStr = trainEpsDecayField.getText().replaceAll("\\s+", "");
-                trainEpisodes = Integer.parseInt(trainEpStr);
-                alpha = Double.parseDouble(alphaStr);
-                gamma = Double.parseDouble(gammaStr);
-                epsStart = Double.parseDouble(epsStartStr);
-                epsMin = Double.parseDouble(epsMinStr);
-                epsLDecay = Double.parseDouble(epsDecayStr);
-            } catch (NumberFormatException nfe) {
-                JOptionPane.showMessageDialog(frame, "Invalid number format for one or more of the training field values", "Training error", JOptionPane.ERROR_MESSAGE);
-                return;
-            }
             
             // Additional validation
             if (trainEpisodes < 1) {
@@ -649,7 +647,8 @@ public class GUI implements ActionListener
                 return;
             }
             
-            // === TRAINING ===                 
+            // === TRAINING ===       
+            MyAgent trainAgent = (MyAgent)this.agent;
             Double eps;
             Double epsDecayStep = 1.0 / (trainEpisodes * epsLDecay);
             System.out.println("=== TRAINING STARTED ==="); 
@@ -678,8 +677,8 @@ public class GUI implements ActionListener
                 eps = epsStart;
                 for (int j = 0; j < trainEpisodes; j++) {
                     eps = eps - epsDecayStep;
-                    eps = (eps < epsMin) ? 0.1 : eps;
-                    env.trainEpisode(alpha, gamma, eps, map);
+                    eps = (eps < epsMin) ? epsMin : eps;
+                    trainAgent.trainEpisode(alpha, gamma, eps, map);
                 }
                 
                 System.out.printf("> ... done training through %d episodes on current map (epsilon after training: %f)\n", trainEpisodes, eps);
@@ -692,8 +691,8 @@ public class GUI implements ActionListener
 
                     for (int j = 0; j < trainEpisodes; j++) {
                         eps = eps - epsDecayStep;
-                        eps = (eps < epsMin) ? 0.1 : eps;
-                        env.trainEpisode(alpha, gamma, eps, map);
+                        eps = (eps < epsMin) ? epsMin : eps;
+                        trainAgent.trainEpisode(alpha, gamma, eps, map);
                     }
                     System.out.printf("> ... done training through %d episodes on premade map %d/7 (epsilon after training: %f)\n", trainEpisodes, i+1, eps);
                 }
@@ -718,10 +717,6 @@ public class GUI implements ActionListener
              refreshStats();
             //saving tables
         }
-         
-         
-         
-        
     }
     
     /**
